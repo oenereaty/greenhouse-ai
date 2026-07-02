@@ -1,9 +1,22 @@
+# API 키 (절대 커밋 금지)
 .env
+
+# Python
 __pycache__/
 *.pyc
-.DS_Store
-chroma_db/
-data/raw/
-*.pdf
 venv/
 .venv/
+
+# macOS
+.DS_Store
+
+# 생성 데이터 (로컬 전용, RAG 벡터스토어·진단/생육/가격 로그)
+chroma_db/
+data/raw/
+growth_data.csv
+decisions.json
+advice_log.json
+.growth_data_is_sample
+.last_email_sent
+.last_rag_check
+pest_log.json

@@ -5,7 +5,7 @@
 demo_clock 기준으로 맞춘 뒤로는 리포트만 실제 오늘 기준이면 다른 탭과 기간이
 어긋난다(2026-07-10 사용자 확인) — 영농일지도 같은 기준으로 필터링된다.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 from statistics import mean
 
 from tools import diary_data
@@ -92,7 +92,7 @@ def build_report(days: int = 7) -> dict:
 
     return {
         "period": {"start": start, "end": end, "days": days},
-        "generated_at": datetime.now().strftime("%Y-%m-%dT%H%M%S"),
+        "generated_at": demo_now().strftime("%Y-%m-%dT%H%M%S"),
         "env": {
             "daily": daily_env,
             "summary": env_summary,

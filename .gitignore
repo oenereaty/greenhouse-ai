@@ -1,5 +1,6 @@
 # API 키 (절대 커밋 금지)
 .env
+frontend/deploy.env
 
 # Python
 __pycache__/
@@ -9,6 +10,9 @@ venv/
 
 # macOS
 .DS_Store
+
+# 세션 중 임시 디버그/검증 스크립트·스크린샷·헤드리스 브라우저 프로필
+.dbg/
 
 # 생성 데이터 (로컬 전용, RAG 벡터스토어·진단/생육/가격 로그)
 chroma_db/

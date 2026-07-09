@@ -16,8 +16,10 @@ mix·water_liters가 주어지면 n/p/k/ca/mg는 tools.fertilizer_db.compute_ppm
 ec/ph는 두 방식 모두 실측값이라 계산 대상이 아니다.
 """
 import json
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
+
+from tools.demo_clock import demo_now
 
 NUTRIENT_LOG_FILE = Path(__file__).parent.parent / "nutrient_log.json"
 
@@ -88,7 +90,7 @@ def add_entry(
         "water_liters": water_liters,
         "symptom": symptom or "",
         "ai_analysis": ai_analysis or "",
-        "updated": date.today().isoformat(),
+        "updated": demo_now().date().isoformat(),
     }
     data.setdefault(date_str, []).append(entry)
     _write(data)
@@ -119,11 +121,11 @@ def delete_entry(date_str: str, idx: int) -> None:
 
 if __name__ == "__main__":
     idx = add_entry(
-        date.today().isoformat(),
+        demo_now().date().isoformat(),
         {"n": 150, "p": 50, "k": 200, "ca": 150, "mg": 40, "ec": 2.2, "ph": 6.0},
         symptom="잎끝 마름 증상 관찰",
     )
     print("added idx:", idx)
-    print(day_entries(date.today().isoformat()))
-    delete_entry(date.today().isoformat(), idx)
-    print("after delete:", day_entries(date.today().isoformat()))
+    print(day_entries(demo_now().date().isoformat()))
+    delete_entry(demo_now().date().isoformat(), idx)
+    print("after delete:", day_entries(demo_now().date().isoformat()))

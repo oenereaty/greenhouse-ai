@@ -296,22 +296,33 @@ def fetch_all_grades(
         _, rows_pm   = f_pm.result()
 
     if not actual:
-        # 실시간 API가 오늘 데이터를 못 찾았다(일일 호출 한도 초과 포함) — 이미 우리가
-        # archive_ledger로 저장해둔 당일 원자료가 있으면 그걸로 대체 계산한다.
+        # 실시간 API가 오늘 데이터를 못 찾았다(일일 호출 한도 초과 포함, 또는 오늘 경매가
+        # 아직 시작 전이라 당연히 빈 상태) — 이미 우리가 archive_ledger로 저장해둔 원자료가
+        # 있는 가장 최근 날짜(최대 7일 전까지 소급)를 찾아 그걸로 대체 계산한다. "—"만 보여주면
+        # 사용자 입장에서 진짜 이상이 있는지 단순히 오늘 장이 안 열렸는지 구분이 안 되므로,
+        # 최근 실측치라도 보여주고 어느 날짜인지 라벨로 명시한다(사용자 피드백, 2026-07-10).
         from tools.auction_archive import grade_avg_for_date
-        archived = grade_avg_for_date(today)
-        if archived:
-            result: dict = {"date": today.isoformat(), "market": "아카이브(오늘 저장분)", "unit": "4kg"}
-            for gn in ("상", "중", "하"):
-                p = archived[gn]
-                pk = (p // 4) if p else None
-                result[gn] = {
-                    "price": p, "price_kg": pk,
-                    "price_str": f"{p:,}" if p else "—",
-                    "price_kg_str": f"{pk:,}" if pk else "—",
-                    "dod_change": None, "prev_month": None, "prev_year": None, "avg_year": None,
+        for back in range(7):
+            d = today - timedelta(days=back)
+            archived = grade_avg_for_date(d)
+            if archived:
+                is_today = back == 0
+                result: dict = {
+                    "date": d.isoformat(),
+                    "market": "아카이브(오늘 저장분)" if is_today else f"아카이브({d.isoformat()} 최근값)",
+                    "unit": "4kg",
+                    "is_stale": not is_today,
                 }
-            return result
+                for gn in ("상", "중", "하"):
+                    p = archived[gn]
+                    pk = (p // 4) if p else None
+                    result[gn] = {
+                        "price": p, "price_kg": pk,
+                        "price_str": f"{p:,}" if p else "—",
+                        "price_kg_str": f"{pk:,}" if pk else "—",
+                        "dod_change": None, "prev_month": None, "prev_year": None, "avg_year": None,
+                    }
+                return result
         empty = {gn: _empty_grade() for gn in ("상", "중", "하")}
         return {"date": today.isoformat(), "market": "—", "unit": "4kg", **empty}
 

@@ -21,18 +21,18 @@ const CHAT_EXAMPLES = [
   "지금 기상 파악해서 조치 알려줘",
   "현재 온실 상태를 보고 환기 열어도 되는지 판단해줘",
   "오늘 VPD가 높은 편인지 확인하고 조치 알려줘",
-  "지금 습도 기준으로 병해 위험이 있는지 알려줘",
+  "가격 상황 보고 오늘 출하가 나은지 알려줘",
   "CO2 시비를 지금 해도 되는지 판단해줘",
+  "지금 습도 기준으로 병해 위험이 있는지 알려줘",
   "오늘 야간 온도는 몇 도로 맞추면 좋아?",
   "최근 생육 데이터 기준으로 이상한 점 찾아줘",
-  "가격 상황 보고 오늘 출하가 나은지 알려줘",
   "내 최근 판단 기록을 보고 반복되는 문제를 정리해줘",
 ];
 
-function pickExample(input: string) {
+function pickExample(input: string, fallback: string) {
   const q = input.trim();
-  if (!q) return CHAT_EXAMPLES[0];
-  return CHAT_EXAMPLES.find((ex) => ex.includes(q) || ex.startsWith(q)) ?? CHAT_EXAMPLES[0];
+  if (!q) return fallback;
+  return CHAT_EXAMPLES.find((ex) => ex.includes(q) || ex.startsWith(q)) ?? fallback;
 }
 
 function ImageDiagnosisSection() {
@@ -526,9 +526,9 @@ function FreeChatSection() {
     else sessionStorage.removeItem(PENDING_KEY);
   };
 
-  const send = async () => {
-    if (!input.trim() || isRunning) return;
-    const q = input.trim();
+  const send = async (override?: string) => {
+    const q = (override ?? input).trim();
+    if (!q || isRunning) return;
     setHistory((h) => [...h, { role: "user", content: q }]);
     setPending(q);
     setInput("");
@@ -559,7 +559,7 @@ function FreeChatSection() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const suggestion = pickExample(input);
+  const suggestion = pickExample(input, CHAT_EXAMPLES[placeholderIndex]);
 
   return (
     <div className="card">
@@ -593,7 +593,7 @@ function FreeChatSection() {
             type="button"
             className="btn"
             disabled={isRunning}
-            onClick={() => setInput(ex)}
+            onClick={() => send(ex)}
             style={{ fontSize: 19.5 }}
           >
             {ex}
@@ -616,7 +616,7 @@ function FreeChatSection() {
           disabled={isRunning}
           style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid var(--color-border)" }}
         />
-        <button className="btn btn-primary" onClick={send} disabled={isRunning || !input.trim()}>
+        <button className="btn btn-primary" onClick={() => send()} disabled={isRunning || !input.trim()}>
           전송
         </button>
       </div>

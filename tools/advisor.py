@@ -10,6 +10,8 @@ from pathlib import Path
 
 import requests
 
+from tools.demo_clock import demo_now
+
 BASE_DIR = Path(__file__).parent.parent
 ADVICE_LOG = BASE_DIR / "advice_log.json"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
@@ -156,7 +158,7 @@ def generate_advice(
     return {
         "situation": situation or ("LLM이 빈 응답을 반환했습니다. 다시 시도해 주세요." if not raw else raw),
         "recommendation": recommendation,
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "generated_at": demo_now().isoformat(timespec="seconds"),
         "sensor": sensor,
         "outdoor": od or None,
     }
@@ -167,7 +169,7 @@ def save_response(advice: dict, response: str) -> dict:
     entry = {
         **advice,
         "farmer_response": response,
-        "responded_at": datetime.now().isoformat(timespec="seconds"),
+        "responded_at": demo_now().isoformat(timespec="seconds"),
     }
     log = _load_raw()
     log.append(entry)

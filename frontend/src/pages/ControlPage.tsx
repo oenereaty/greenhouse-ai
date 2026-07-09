@@ -130,7 +130,7 @@ export default function ControlPage() {
           </select>
           {autoStatusQ.data?.last_run_at && (
             <span style={{ fontSize: 19.5, color: "var(--color-text-muted)" }}>
-              마지막 실행: {autoStatusQ.data.last_run_at.slice(0, 19)}
+              마지막 실행: {new Date(autoStatusQ.data.last_run_at * 1000).toLocaleString("ko-KR")}
             </span>
           )}
         </div>
@@ -175,7 +175,7 @@ export default function ControlPage() {
               {tempAnalysis.dayAvg > 30
                 ? `주간 고온(${tempAnalysis.dayAvg}℃) 감지. 야간 ${tempAnalysis.recNight}℃ 이하 목표. 관수·환기 우선 점검.`
                 : tempAnalysis.dayAvg >= 22
-                  ? `주간 온도 적정(${tempAnalysis.dayAvg}℃). 야간 ${tempAnalysis.recNight}℃ 목표 — 주야간 5~7℃ 차 유지 시 착과율 향상.`
+                  ? `주간 온도 적정(${tempAnalysis.dayAvg}℃). 야간 ${tempAnalysis.recNight}℃ 목표.`
                   : `주간 저온(${tempAnalysis.dayAvg}℃). 야간 최소 16℃ 이상 유지 필요.`}
             </p>
           </>

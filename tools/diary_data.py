@@ -13,8 +13,10 @@ import io
 import json
 import re
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
+
+from tools.demo_clock import demo_now
 
 DIARY_FILE = Path(__file__).parent.parent / "diary.json"
 _MEMO_FILE = Path(__file__).parent.parent / "memo_log.json"
@@ -160,7 +162,7 @@ def add_entry(date_str: str, content: str,
     data = load_all()
     data.setdefault(date_str, []).append(
         _entry(datetime.now().strftime("%H:%M"), content, tags, pesticides,
-               date.today().isoformat(), attachments)
+               demo_now().date().isoformat(), attachments)
     )
     _write(data)
 

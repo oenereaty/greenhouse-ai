@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # CORS — Vite dev server default port
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
+    # 백엔드를 Cloudflare Tunnel 등으로 외부 노출할 때만 설정 — 비어 있으면
+    # 인증 없이 그대로 열려있다(로컬 개발 기본값). backend/auth.py 참고.
+    backend_api_key: str = ""
+
     def capability_flags(self) -> dict[str, bool]:
         """.env 미설정 시 UI가 우아하게 기능을 숨길 수 있도록 하는 플래그."""
         return {

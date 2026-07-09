@@ -202,8 +202,8 @@ export default function WeatherPage() {
                 <Bar yAxisId="rh" dataKey="pop" name="강수확률(%)" fill="#74c0fc" fillOpacity={0.42}>
                   <LabelList dataKey="pop" content={renderPopLabel} />
                 </Bar>
-                <Line yAxisId="temp" type="monotone" dataKey="temp" name="외부온도(℃)" stroke="#e03131" strokeWidth={2} dot={false} />
-                <Line yAxisId="rh" type="monotone" dataKey="rh" name="상대습도(%)" stroke="#1971c2" strokeWidth={2} dot={false} strokeDasharray="5 3" />
+                <Line yAxisId="temp" type="natural" dataKey="temp" name="외부온도(℃)" stroke="#e03131" strokeWidth={2} dot={false} isAnimationActive animationDuration={1100} animationEasing="ease-out" />
+                <Line yAxisId="rh" type="natural" dataKey="rh" name="상대습도(%)" stroke="#1971c2" strokeWidth={2} dot={false} strokeDasharray="5 3" isAnimationActive animationDuration={1100} animationEasing="ease-out" />
               </ComposedChart>
             </ResponsiveContainer>
             <p style={{ fontSize: 20, color: "var(--color-text-muted)", marginTop: 8 }}>

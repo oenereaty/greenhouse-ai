@@ -12,6 +12,8 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 
+from tools.demo_clock import demo_now
+
 import chromadb
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from pypdf import PdfReader
@@ -501,7 +503,7 @@ def diagnose(
         outdoor_hint = ""
 
     prompt = PROMPT_TEMPLATE.format(
-        now=datetime.now().strftime("%Y-%m-%d %H:%M (%a)"),
+        now=demo_now().strftime("%Y-%m-%d %H:%M (%a)"),
         temp=temp, rh=rh, co2=co2, solar=solar, vpd=vpd,
         n_docs=len(docs),
         context=_format_context(docs),
@@ -516,7 +518,7 @@ def diagnose(
         if d["meta"].get("direct_control_rule") == "True"
     ]
     record = {
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "timestamp": demo_now().isoformat(timespec="seconds"),
         "sensor_input": {"temp": temp, "rh": rh, "co2": co2, "solar": solar},
         "vpd_calculated": vpd,
         "outdoor": outdoor,
@@ -583,7 +585,7 @@ def chat_query(
     if day_avg and rec_night:
         temp_analysis_section = (
             f"오늘 주간 평균 온도: {day_avg}℃ → 권장 야간 설정 온도: {rec_night}℃ "
-            f"(주야간 5℃ 차 기준)\n"
+            f"(주야간 5~7℃ 차 기준)\n"
         )
     else:
         temp_analysis_section = ""

@@ -113,9 +113,9 @@ export default function GrowthPage() {
             ))}
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 19.5, flex: 1, minWidth: 220 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 19.5, minWidth: 140 }}>
           최근 {weeks}주
-          <input type="range" min={1} max={42} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} />
+          <input type="range" min={1} max={42} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} style={{ width: 140 }} />
         </label>
       </div>
 
@@ -216,6 +216,7 @@ export default function GrowthPage() {
                     key={z} type="monotone" dataKey={z} name={`구역 ${z}`}
                     stroke={ZONE_COLORS[z] ?? "#333"} strokeWidth={2.5}
                     strokeDasharray={ZONE_DASH[z]} dot={{ r: 3 }}
+                    isAnimationActive animationDuration={1100} animationEasing="ease-out"
                   />
                 ))}
               </LineChart>
@@ -256,6 +257,7 @@ export default function GrowthPage() {
                       key={z} type="monotone" dataKey={z} name={`구역 ${z}`}
                       stroke={ZONE_COLORS[z] ?? "#333"} strokeWidth={2.5}
                       strokeDasharray={ZONE_DASH[z]} dot={false}
+                      isAnimationActive animationDuration={1100} animationEasing="ease-out"
                     />
                   ))}
                 </LineChart>

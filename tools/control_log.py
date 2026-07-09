@@ -4,8 +4,9 @@
 모듈과 같은 관례(Path(__file__).parent.parent 기준 파일 경로)로 추출한 것.
 """
 import json
-from datetime import datetime
 from pathlib import Path
+
+from tools.demo_clock import demo_now
 
 CONTROL_LOG = Path(__file__).parent.parent / "control_log.json"
 
@@ -34,7 +35,7 @@ def add_entry(
 ) -> dict:
     entries = load_all()
     entry = {
-        "시각":       datetime.now().isoformat(timespec="seconds"),
+        "시각":       demo_now().isoformat(timespec="seconds"),
         "제어 대상":  target,
         "조치":       action,
         "설정값":     setval or "—",

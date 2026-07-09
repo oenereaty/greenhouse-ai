@@ -26,7 +26,7 @@ def forecast() -> list[dict]:
     rows = cached("weather_forecast", ttl_seconds=3600, fn=lambda: get_short_forecast(nx, ny))
     out = []
     for r in rows:
-        sky_disp, light = sky_info(r.get("SKY"), r.get("PTY"))
+        sky_disp, light = sky_info(r.get("SKY"), r.get("PTY"), r.get("time"))
         out.append({**r, "sky_disp": sky_disp, "light_estimate": light})
     return out
 

@@ -147,7 +147,7 @@ def add_record(
     """Append a new growth record to the CSV."""
     ensure_sample_csv()
     row = {
-        "date": record_date or date.today().isoformat(),
+        "date": record_date or demo_now().date().isoformat(),
         "zone": zone,
         "crop_height_cm": crop_height_cm,
         "leaf_count": leaf_count,

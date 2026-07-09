@@ -379,8 +379,8 @@ export interface AutoDiagnosisSettings {
 }
 
 export interface AutoDiagnosisStatus extends AutoDiagnosisSettings {
-  last_run_at: string | null;
-  next_run_at: string | null;
+  last_run_at: number | null;
+  next_run_at: number | null;
   last_job_id: string | null;
 }
 

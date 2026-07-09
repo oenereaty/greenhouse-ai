@@ -21,6 +21,12 @@ import RiskCardPanel from "../components/RiskCardPanel";
 
 const HOUR_OPTIONS = [6, 18, 24] as const;
 
+function co2Note(solar: number) {
+  return solar < 20
+    ? "일사 없음 — 광합성 소비 없이 호흡으로 축적 중, 시비 판단용 아님"
+    : "광합성 진행 중 — 시비 판단에 참고 가능";
+}
+
 function fmtTime(ts: string) {
   const d = new Date(ts);
   return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(
@@ -205,7 +211,7 @@ export default function EnvironmentPage() {
         <MetricCard label="온도" value={`${sd.temp}℃`} />
         <MetricCard label="습도" value={`${sd.rh}%`} />
         <MetricCard label="절대습도" value={`${sd.abs_humidity} g/m³`} />
-        <MetricCard label="CO2" value={`${Math.round(sd.co2)} ppm`} />
+        <MetricCard label="CO2" value={`${Math.round(sd.co2)} ppm`} hint={co2Note(sd.solar)} />
         <MetricCard label="외부 일사" value={`${sd.solar} W/m²`} warn={sd.solar_is_mock} />
         <MetricCard label="VPD" value={`${sd.vpd} kPa`} />
       </MetricGrid>
@@ -242,8 +248,8 @@ export default function EnvironmentPage() {
                 <YAxis yAxisId="temp" tick={{ fontSize: 17 }} />
                 <YAxis yAxisId="rh" orientation="right" tick={{ fontSize: 17 }} />
                 <Tooltip />
-                <Line yAxisId="temp" type="monotone" dataKey="temp" name="온도(℃)" stroke="#e03131" dot={false} strokeWidth={2} />
-                <Line yAxisId="rh" type="monotone" dataKey="rh" name="습도(%)" stroke="#1971c2" dot={false} strokeWidth={2} strokeDasharray="5 3" />
+                <Line yAxisId="temp" type="natural" dataKey="temp" name="온도(℃)" stroke="#e03131" dot={false} strokeWidth={2} isAnimationActive animationDuration={1100} animationEasing="ease-out" />
+                <Line yAxisId="rh" type="natural" dataKey="rh" name="습도(%)" stroke="#1971c2" dot={false} strokeWidth={2} strokeDasharray="5 3" isAnimationActive animationDuration={1100} animationEasing="ease-out" />
               </ComposedChart>
             </ChartCard>
 
@@ -253,7 +259,7 @@ export default function EnvironmentPage() {
                 <XAxis dataKey="time" tick={{ fontSize: 17 }} minTickGap={30} />
                 <YAxis tick={{ fontSize: 17 }} />
                 <Tooltip />
-                <Line type="monotone" dataKey="co2" name="CO2(ppm)" stroke="#2f9e44" dot={false} strokeWidth={2} />
+                <Line type="natural" dataKey="co2" name="CO2(ppm)" stroke="#2f9e44" dot={false} strokeWidth={2} isAnimationActive animationDuration={1100} animationEasing="ease-out" />
               </ComposedChart>
             </ChartCard>
 
@@ -263,7 +269,7 @@ export default function EnvironmentPage() {
                 <XAxis dataKey="time" tick={{ fontSize: 17 }} minTickGap={30} />
                 <YAxis tick={{ fontSize: 17 }} />
                 <Tooltip />
-                <Area type="monotone" dataKey="solar" name="일사량(W/m²)" stroke="#e67700" fill="#f59f00" fillOpacity={0.3} />
+                <Area type="natural" dataKey="solar" name="일사량(W/m²)" stroke="#e67700" fill="#f59f00" fillOpacity={0.3} isAnimationActive animationDuration={1100} animationEasing="ease-out" />
               </ComposedChart>
             </ChartCard>
 
@@ -274,7 +280,7 @@ export default function EnvironmentPage() {
                 <YAxis tick={{ fontSize: 17 }} domain={["auto", "auto"]} />
                 <Tooltip />
                 <ReferenceArea y1={0.3} y2={1.5} fill="#d3f9d8" fillOpacity={0.6} />
-                <Line type="monotone" dataKey="vpd" name="VPD(kPa)" stroke="#862e9c" dot={false} strokeWidth={2} />
+                <Line type="natural" dataKey="vpd" name="VPD(kPa)" stroke="#862e9c" dot={false} strokeWidth={2} isAnimationActive animationDuration={1100} animationEasing="ease-out" />
               </ComposedChart>
             </ChartCard>
           </div>
@@ -301,7 +307,7 @@ export default function EnvironmentPage() {
               <MetricCard label="온도" value={`${sd.temp}℃`} />
               <MetricCard label="상대습도" value={`${sd.rh}%`} />
               <MetricCard label="절대습도" value={`${sd.abs_humidity} g/m³`} />
-              <MetricCard label="CO2" value={`${Math.round(sd.co2)} ppm`} />
+              <MetricCard label="CO2" value={`${Math.round(sd.co2)} ppm`} hint={co2Note(sd.solar)} />
               <MetricCard label="포화수분" value={`${sd.saturation_ah} g/m³`} hint="이 온도가 머금을 수 있는 최대 수분(RH 100%)" />
               <MetricCard label="수분부족" value={`${sd.moisture_deficit} g/m³`} hint="포화수분 − 현재 절대습도. 클수록 건조(증산 활발)" />
             </MetricGrid>
@@ -398,8 +404,8 @@ export default function EnvironmentPage() {
                 <Bar yAxisId="rh" dataKey="pop" name="강수확률(%)" fill="#74c0fc" fillOpacity={0.42}>
                   <LabelList dataKey="pop" content={renderPopLabel} />
                 </Bar>
-                <Line yAxisId="temp" type="monotone" dataKey="temp" name="외부온도(℃)" stroke="#e03131" strokeWidth={2} dot={false} />
-                <Line yAxisId="rh" type="monotone" dataKey="rh" name="상대습도(%)" stroke="#1971c2" strokeWidth={2} dot={false} strokeDasharray="5 3" />
+                <Line yAxisId="temp" type="natural" dataKey="temp" name="외부온도(℃)" stroke="#e03131" strokeWidth={2} dot={false} isAnimationActive animationDuration={1100} animationEasing="ease-out" />
+                <Line yAxisId="rh" type="natural" dataKey="rh" name="상대습도(%)" stroke="#1971c2" strokeWidth={2} dot={false} strokeDasharray="5 3" isAnimationActive animationDuration={1100} animationEasing="ease-out" />
               </ComposedChart>
             </ResponsiveContainer>
 

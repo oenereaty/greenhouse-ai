@@ -20,3 +20,17 @@ advice_log.json
 .last_email_sent
 .last_rag_check
 pest_log.json
+diary.json
+diary.json.bak
+work_log.json
+goal_settings.json
+nutrient_log.json
+auction_history.csv
+attachments/
+*.log
+auto_diagnosis_settings.json
+control_log.json
+reports/snapshots/
+pest_log.json.migrated
+growth_data.csv.bak*
+growth_data.csv.before_*

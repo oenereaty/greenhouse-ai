@@ -1,0 +1,105 @@
+2026-07-08 React migration follow-up
+
+작업 목적:
+- Claude Code가 중간에 멈춘 React 이전 작업을 이어받아, 현재 React/FastAPI 전환 상태에서 바로 문제가 되는 런타임/보안 결함을 정리했다.
+
+확인한 상태:
+- 기존 Streamlit UI는 ui/app.py에 남아 있다.
+- 새 UI는 frontend/src 아래 React + TypeScript + Vite 구조로 구성되어 있다.
+- FastAPI 백엔드는 backend/routers 아래에 환경, 생육, 기상, 가격, 제어, 상담, 영농일지 라우터를 제공한다.
+
+변경 파일:
+- tools/diary_data.py
+- backend/routers/diary.py
+- backend/jobs.py
+- frontend/src/hooks/useJobPoll.ts
+- frontend/src/components/common.tsx
+- frontend/src/pages/ControlPage.tsx
+- frontend/src/types/jobs.ts
+- tools/advisor.py
+- ui/advisor.py
+- README.md
+- work_log_react_migration.txt
+
+변경 내용:
+- 영농일지 첨부파일 저장을 UUID 기반 파일명으로 변경했다.
+- 첨부파일 날짜는 YYYY-MM-DD 형식만 허용하도록 검증을 추가했다.
+- 첨부파일 허용 확장자를 제한했다: jpg, jpeg, png, gif, webp, pdf, txt, csv, xlsx, xls.
+- 첨부파일 최대 크기를 20MB로 제한했다.
+- 첨부파일 다운로드 시 ATTACH_DIR 밖 경로 접근을 차단하는 attachment_path() 검증 함수를 추가했다.
+- diary 라우터에서 첨부파일 저장/조회 오류를 400 또는 404 HTTP 응답으로 변환하도록 수정했다.
+- 백그라운드 job 에러 응답에서 전체 traceback 노출을 제거했다. 상세 traceback은 서버 콘솔 로그에만 출력한다.
+- 동시에 실행 가능한 job 수를 3개로 제한해 LLM/RAG 작업이 무한히 누적되는 상황을 줄였다.
+- React useJobPoll에서 backend 상태값 queued를 실행 중 상태로 인식하도록 수정했다.
+- React JobStatus 타입을 backend 응답과 맞췄다: pending 대신 queued, elapsed_seconds는 null 허용.
+- React JobButton에서 elapsed_seconds가 null일 때 toFixed()로 화면이 깨지는 문제를 수정했다.
+- ControlPage의 조치 제안 기능에서 직접 fetch polling과 alert()를 제거하고 공통 useJobPoll 훅을 사용하도록 바꿨다.
+- 조치 제안 로직을 ui/advisor.py에서 tools/advisor.py로 분리했다.
+- 기존 Streamlit 앱 호환성을 위해 ui/advisor.py는 tools.advisor를 re-export하는 wrapper로 남겼다.
+- backend/routers/control.py가 ui 계층 대신 tools.advisor를 import하도록 수정했다.
+- README의 기본 실행 경로를 Streamlit에서 FastAPI + React(Vite)로 변경하고, Streamlit은 레거시 실행 경로로 명시했다.
+- 현재 환경 위험도 카드에서 병해충 이미지/이름 클릭 시 큰 이미지 모달이 뜨도록 수정했다.
+- 병해충 위험도 응답에 원인 분류(pathogen_type)를 추가하고, React 카드/모달/전체 표에 곰팡이성·난균성·세균성·해충·바이러스 매개 가능 여부를 표시했다.
+- 레거시 diary.json 항목에 attachments/tags/pesticides 필드가 없을 때 메모·일지 화면이 깨지는 문제를 방어 처리했다.
+- KMA 시간별 단기예보를 표 대신 그래프로 표시하도록 WeatherPage를 수정했다.
+- 실시간 경매 현황은 최초 20건만 표시하고 더보기/접기 버튼을 추가했다.
+- 실시간 경매 현황 컬럼명을 클릭하면 ㄱㄴㄷ 또는 최소/최대순 정렬되도록 수정했다.
+- JobButton에 단계별 진행 문구(progressLabels)를 추가하고, LLM 진단/시장 브리핑에서 "지금 ... 중입니다" 문구를 표시하도록 수정했다.
+- tobio.pages.dev의 CSS 방향을 참고해 전역 테마를 에메랄드/스톤 팔레트, 소프트 그라데이션 배경, 반투명 카드, pill 네비게이션, hover lift 중심으로 리디자인했다.
+- 실시간 경매현황 평균가 계산에서 IQR 기준 이상값을 제외하도록 수정하고, 이상값 행은 차콜색으로 표시했다.
+- AI 응답 표시에서 **, __, 마크다운 제목 기호를 제거하는 공통 AiText/cleanAiText 유틸을 추가했다.
+- 시장 동향 브리핑 응답 바로 아래에 클릭 가능한 근거 기사 버튼을 표시하도록 수정했다.
+- 시장 브리핑 프롬프트에 마크다운 강조 기호 금지 지시를 추가했다.
+- 전반적인 글자 크기를 키우고 AI 응답 본문 크기/줄간격을 확장했다.
+- LLM 진단 결과 표시에서 response가 비어 있으면 record.llm_response로 fallback하고, 둘 다 비면 재진단 안내를 표시하도록 수정했다.
+- Ollama가 빈 응답을 반환하면 성공 처리하지 않고 RuntimeError로 처리하도록 수정했다.
+- 조치 제안의 허용/거부/직접 입력 응답이 최신 판단 기록(decisions.json)의 farmer_action에 남도록 수정했다.
+- AI 상담 입력창에 예시 질문 placeholder 순환, 예시 질문 버튼, Tab 자동완성을 추가했다.
+- 전역 글자 크기를 추가로 키웠다: body 18px, 카드 17px, 표 16.5px, AI 답변 17px, 지표 숫자 26px.
+- KMA 시간별 예보 그래프에서 예보광량 막대를 제거하고, 광량은 별도 시간대별 아이콘 타임라인으로 분리했다.
+- 자동 진단 간격 옵션을 30분, 60분, 90분으로 제한했다.
+- 제어 화면의 LLM 진단/조치 제안을 "현재 상태 진단 및 실행할 조치 추천" 단일 흐름으로 통합했다.
+- backend에 /api/control/diagnosis-with-advice endpoint를 추가해 진단 후 조치 추천을 한 job에서 실행하도록 했다.
+
+남은 작업:
+- JSON 파일 저장은 아직 파일 락/원자적 쓰기가 완전히 적용되지 않았다. 동시 요청 안정성을 위해 SQLite 또는 atomic write 유틸로 옮기는 작업이 필요하다.
+- FastAPI 앱 시작 시 RAG 벡터스토어를 동기 로딩하는 구조는 여전히 부팅 지연 위험이 있다. lazy loading 또는 background warmup으로 바꾸는 것이 좋다.
+- Streamlit 제거 여부가 확정되면 requirements.txt와 README에서 Streamlit 실행 경로를 정리해야 한다.
+
+[2026-07-08] 온습도 우선 제어 / CO2 시비 판단 수정 / 강수확률 라벨
+- 토마토 농가 기준을 반영해 제어 우선순위를 "온도·습도 안정화 1순위, CO2 관리는 그 다음"으로 명시.
+- tools/env_calc.py: CO2가 낮아도 습도 85% 이상 또는 온도 28℃ 이상이면 CO2 시비 대신 환기·순환·차광을 우선 안내하도록 수정. 환기가 필요한 동안 CO2 시비 효율이 낮다는 설명 추가.
+- tools/advisor.py: 조치 제안/경보 LLM 프롬프트에 고습·고온 시 CO2 시비 금지, 낮 시간 CO2 하락은 광합성 소비 가능성으로 해석하는 규칙 추가.
+- rag/pipeline.py: LLM 진단/AI 상담 프롬프트에 온습도 우선 제어 규칙 추가. 환기가 필요한 상태에서는 CO2 시비를 권하지 않도록 수정.
+- frontend/src/pages/WeatherPage.tsx: KMA 시간별 예보 강수확률 막대 내부 하단에 퍼센트 라벨 표시 추가.
+- 검증: npm run build 통과, py -m compileall -q tools rag 통과. Vite 번들 크기 경고는 기존 수준의 경고로 남음.
+
+[2026-07-08] 시장 동향 브리핑 속보성 변수 중심 개선
+- tools/naver_news.py: 뉴스 검색어를 토마토 도매가격, 출하량, 최저임금, 유가/면세유, 환율, 전기요금, 비료/농자재, 물류비, 폭염/호우 등 단기 가격 변수 중심으로 확대.
+- tools/naver_news.py: 기사마다 검색축(query)을 저장하고, 급등/상승/환율/유가/최저임금/전기요금/출하량 등 영향 키워드가 많은 기사를 우선 정렬하도록 추가.
+- backend/jobs_impl.py: 시장 브리핑 프롬프트에서 구조적 일반론(기후 변화, 노동력 감소 같은 당연한 설명)을 금지하고, 뉴스 속보성 변수 -> 가격 영향 방향 -> 확인 지표 형식으로 짧게 작성하도록 수정.
+- frontend/src/pages/PricesPage.tsx: 시장 동향 브리핑 설명 문구를 최저임금·유가·환율·전기요금·농자재·물류비·수급·기상 재해 중심으로 변경.
+- 검증: npm run build 통과, py -m compileall -q backend tools 통과. Vite 번들 크기 경고는 기존 경고로 남음.
+
+[2026-07-08] 생육 데이터와 시장 가격을 연계한 출하·온도 전략 추가
+- tools/harvest_strategy.py 신규 추가: 최근 생육 기록(착과수/화방수/화방높이), 최근 경락가 30일 추세, 현재 온습도를 묶어 14일 뒤 출하 타이밍 전략을 계산.
+- backend/routers/prices.py: GET /api/prices/harvest-strategy 엔드포인트 추가. horizon_days는 7~28일 범위로 제한하고 기본 14일 기준으로 계산.
+- frontend/src/types/api.ts, frontend/src/api/prices.ts: HarvestStrategy 타입과 API 클라이언트 추가.
+- frontend/src/pages/GrowthPage.tsx: 생육 탭에 "시장 연계 출하·온도 전략" 카드 추가. 착과 상태를 보는 화면에서 바로 2주 뒤 가격 흐름과 온도 관리 방향을 확인하도록 연결.
+- 전략 예: 가격 상승 신호 + 착과 진행이면 "출하 지연 검토"와 평균온도 낮게 관리 검토를 제안. 고온·고습 위험이면 가격 전략보다 환경 안정 우선으로 판단.
+- 검증: npm run build 통과, py -m compileall -q backend tools 통과. 현재 실행 중인 FastAPI는 이전 프로세스라 새 API가 404를 반환했으며, 서버 재시작 후 활성화 필요.
+
+[2026-07-08] 평균 경매가 한계 보완: 산지·시장 프리미엄 분석 추가
+- tools/at_client.py: 실시간 경매 원장에서 이상값을 제외하고 출하지 × 도매시장 조합별 평균가, 건수, 시장평균대비, 전체평균대비, 산지평균대비를 계산해 origin_market으로 반환.
+- frontend/src/types/api.ts: PriceLedger에 origin_market 타입 추가.
+- frontend/src/pages/PricesPage.tsx: 실시간 경매현황 상단에 "산지·시장 프리미엄" 카드 추가. 평균 경매가 대신 어느 출하지가 어느 시장에서 프리미엄을 받는지 표시.
+- 화면에 단기 역전 가능성 안내 추가: 특정 시장이 비싸게 보이면 물량이 몰려 1~2일 안에 역전될 수 있으므로 오늘의 단기 신호로 봐야 한다고 명시.
+- 검증: npm run build 통과, py -m compileall -q tools 통과. Vite 번들 크기 경고는 기존 경고로 남음.
+
+[2026-07-08] 경매 원장 누적 저장 및 산지·시장 시즌 사이클 기반 구축
+- tools/auction_archive.py 신규 추가: 실시간 경매 원장을 auction_history.csv에 중복 없이 누적 저장하고, 누적 요약/산지×시장×월별 프리미엄 요약을 계산.
+- backend/routers/prices.py: GET /api/prices/ledger 호출 시 원장 데이터를 자동 아카이브하도록 연결. POST /api/prices/archive-ledger, GET /api/prices/archive-summary, GET /api/prices/origin-market-cycle 추가.
+- frontend/src/types/api.ts, frontend/src/api/prices.ts: 경매 아카이브 요약과 산지·시장 사이클 타입/API 추가.
+- frontend/src/pages/PricesPage.tsx: 가격 현황 탭에 "산지·시장 시즌 사이클" 카드 추가. 누적 행 수, 수집 기간, 산지/시장 수, 월별 프리미엄 상위 조합을 표시.
+- .gitignore: 로컬 생성 데이터인 auction_history.csv 제외 추가.
+- 검증: npm run build 통과, py -m compileall -q backend tools 통과, 빈 archive_summary/origin_market_cycle 호출 정상. 현재 실행 중인 FastAPI는 재시작해야 새 API가 반영됨.

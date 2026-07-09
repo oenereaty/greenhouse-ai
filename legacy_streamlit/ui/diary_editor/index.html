@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Malgun Gothic', '맑은 고딕', -apple-system, sans-serif;
+  background: transparent;
+  padding: 2px 4px 4px;
+}
+
+#editor {
+  width: 100%;
+  min-height: 160px;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.75;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #1f1f1f;
+  background: #ffffff;
+  cursor: text;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  caret-color: #333;
+}
+
+#editor:focus {
+  border-color: #4a90d9;
+  box-shadow: 0 0 0 2px rgba(74,144,217,0.2);
+}
+
+.ghost {
+  color: #c0c0c0;
+  font-style: italic;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hint {
+  font-size: 11px;
+  color: #aaa;
+  text-align: right;
+  margin-top: 3px;
+  padding-right: 2px;
+}
+</style>
+</head>
+<body>
+<div
+  id="editor"
+  contenteditable="true"
+  spellcheck="false"
+  aria-multiline="true"
+  placeholder="오늘 작업, 관찰사항, 방제 내용 등을 자유롭게 기록하세요."
+></div>
+<div class="hint">Tab ↹ 자동완성 수락 &nbsp;·&nbsp; 스페이스 두 번 → 트리거</div>
+
+<script>
+// ── Streamlit component protocol ─────────────────────────────────────────
+function toStreamlit(type, extra) {
+  window.parent.postMessage(
+    Object.assign({ isStreamlitMessage: true, type: type }, extra),
+    '*'
+  );
+}
+
+// ── State ─────────────────────────────────────────────────────────────────
+const editor = document.getElementById('editor');
+let terms         = [];
+let ghostText     = '';
+let isComposing   = false;
+let initialized   = false;
+let lastPendKey   = null;
+
+// ── Listen for Streamlit render messages ──────────────────────────────────
+window.addEventListener('message', function (e) {
+  const d = e.data;
+  if (!d || d.type !== 'streamlit:render') return;
+
+  const args = d.args || {};
+  terms = args.autocomplete_terms || [];
+
+  // Initial value (set once per component key lifecycle)
+  if (!initialized && args.value !== undefined) {
+    initialized = true;
+    setEditorText(String(args.value || ''));
+  }
+
+  // Pending insert from Python (e.g. 방제약품)
+  const pkey = args.pending_insert_key;
+  if (args.pending_insert && pkey !== lastPendKey) {
+    lastPendKey = pkey;
+    const cur = getPlainText();
+    setEditorText(cur + '\n' + args.pending_insert);
+    sendValue();
+  }
+
+  adjustHeight();
+});
+
+// Signal ready
+toStreamlit('streamlit:componentReady', { apiVersion: 1 });
+
+// ── Text helpers ──────────────────────────────────────────────────────────
+function getPlainText() {
+  const g = editor.querySelector('.ghost');
+  if (!g) return editor.innerText;
+  // Remove ghost from text
+  const full = editor.innerText;
+  const gt   = g.innerText;
+  return full.endsWith(gt) ? full.slice(0, full.length - gt.length) : full;
+}
+
+function setEditorText(text) {
+  clearGhost();
+  editor.textContent = text;
+  moveCursorToEnd();
+}
+
+function moveCursorToEnd() {
+  try {
+    const range = document.createRange();
+    const sel   = window.getSelection();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch (_) {}
+}
+
+function getLastWord(text) {
+  const m = text.match(/(\S+)$/);
+  return m ? m[1] : '';
+}
+
+function findSuffix(prefix) {
+  if (!prefix || prefix.length < 1) return '';
+  const hit = terms.find(t => t.startsWith(prefix) && t.length > prefix.length);
+  return hit ? hit.slice(prefix.length) : '';
+}
+
+function adjustHeight() {
+  const h = Math.max(200, editor.scrollHeight + 50);
+  toStreamlit('streamlit:setFrameHeight', { height: h });
+}
+
+function sendValue() {
+  toStreamlit('streamlit:setComponentValue', {
+    value: getPlainText(),
+    dataType: 'json'
+  });
+}
+
+// ── Ghost text ────────────────────────────────────────────────────────────
+function showGhost(suffix) {
+  clearGhost();
+  if (!suffix) return;
+  ghostText = suffix;
+  const span = document.createElement('span');
+  span.className = 'ghost';
+  span.setAttribute('contenteditable', 'false');
+  span.textContent = suffix;
+  editor.appendChild(span);
+}
+
+function clearGhost() {
+  const g = editor.querySelector('.ghost');
+  if (g) g.remove();
+  ghostText = '';
+}
+
+function acceptGhost() {
+  if (!ghostText) return;
+  const accepted = ghostText;
+  clearGhost();
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0);
+    range.collapse(false);
+    const node = document.createTextNode(accepted + ' ');
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    editor.appendChild(document.createTextNode(accepted + ' '));
+  }
+  sendValue();
+  updateGhost();
+}
+
+function updateGhost() {
+  const text     = getPlainText();
+  const dblSpace = text.length >= 2 && text[text.length - 1] === ' ' && text[text.length - 2] === ' ';
+  const search   = dblSpace ? text.trimEnd() : text;
+  const lastWord = getLastWord(search);
+  showGhost(findSuffix(lastWord));
+}
+
+// ── Event handlers ────────────────────────────────────────────────────────
+editor.addEventListener('compositionstart', () => { isComposing = true; clearGhost(); });
+editor.addEventListener('compositionend',   () => { isComposing = false; updateGhost(); sendValue(); adjustHeight(); });
+
+editor.addEventListener('input', function () {
+  if (isComposing) return;
+  updateGhost();
+  sendValue();
+  adjustHeight();
+});
+
+editor.addEventListener('keydown', function (e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    if (ghostText) acceptGhost();
+    return;
+  }
+  if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+    clearGhost();
+    return;
+  }
+  if (e.key === 'Escape') clearGhost();
+});
+
+editor.addEventListener('blur',      clearGhost);
+editor.addEventListener('mousedown', e => { if (!e.target.classList.contains('ghost')) clearGhost(); });
+
+// Placeholder styling via CSS attr trick (pure CSS placeholder for contenteditable)
+editor.addEventListener('focus', () => editor.classList.add('focused'));
+editor.addEventListener('blur',  () => editor.classList.remove('focused'));
+</script>
+</body>
+</html>

@@ -120,9 +120,16 @@ AI 분석 및 후속 조치
     msg["From"]    = from_addr
     msg["To"]      = to_addr
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(from_addr, password)
-        server.send_message(msg)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(from_addr, password)
+            server.send_message(msg)
+    except smtplib.SMTPAuthenticationError as e:
+        raise RuntimeError(
+            "Gmail 인증에 실패했습니다. EMAIL_APP_PASSWORD가 유효한 앱 비밀번호인지 확인하세요."
+        ) from e
+    except smtplib.SMTPException as e:
+        raise RuntimeError(f"이메일 발송 실패: {e}") from e
 
     COOLDOWN_FILE.write_text(datetime.now().isoformat(), encoding="utf-8")
 

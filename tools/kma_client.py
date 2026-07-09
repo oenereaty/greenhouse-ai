@@ -122,7 +122,15 @@ def fetch_outdoor(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON) -> dict:
 
 
 def ventilation_hint(outdoor: dict, indoor_temp: float) -> str:
-    """Brief ventilation recommendation based on outdoor conditions."""
+    """Brief ventilation recommendation based on outdoor conditions.
+
+    개별 조건(강수·바람·온도차)을 각각 사실로만 나열하면 "비 중 → 천창 개방 주의"와
+    "무풍 → 자연환기 효율 낮음"처럼 서로 다른 조치를 가리키는 문장이 병렬로 붙어
+    사용자가 결국 환기를 하라는 건지 말라는 건지 스스로 조합해야 하는 문제가 있었다
+    (사용자 피드백). 그래서 마지막에 "종합:" 한 줄로 우선순위를 적용한 최종 판단을
+    덧붙인다 — 강수·강풍처럼 천창을 막는 조건이 있으면 그것이 항상 1순위, 그 다음이
+    온도차(냉각 효과) 판단이다.
+    """
     ot  = outdoor["outdoor_temp"]
     ws  = round(outdoor["wind_speed"], 1)
     pty = outdoor["pty"]
@@ -144,6 +152,21 @@ def ventilation_hint(outdoor: dict, indoor_temp: float) -> str:
         hints.append(f"외기 {ot}℃ ({diff:.1f}℃ 낮음) → 환기 냉각 제한적")
     else:
         hints.append(f"외기 {ot}℃ (실내보다 {abs(diff):.1f}℃ 높음) → 차광·포그 필수")
+
+    # ── 종합 판단: 천창을 막는 조건(강수·강풍)이 최우선, 그 다음 온도차
+    if pty > 0:
+        verdict = "종합: 비가 오고 있어 천창은 닫아두세요. 냉각이 꼭 필요하면 측창만 소폭 여세요."
+    elif ws > 5:
+        verdict = "종합: 바람이 강해 천창 개방을 제한하세요."
+    elif diff > 5:
+        verdict = "종합: 외기가 충분히 시원해 환기 시 냉각 효과가 큽니다. 여세요."
+    elif diff > 0 and ws <= 2:
+        verdict = "종합: 외기는 낮지만 무풍이라 자연환기만으로는 효율이 낮습니다 — 환기팬을 함께 가동하거나 개도를 더 키우세요."
+    elif diff > 0:
+        verdict = "종합: 냉각 효과는 제한적이지만 환기해도 무방합니다."
+    else:
+        verdict = "종합: 외기가 실내보다 높아 환기로는 냉각이 안 됩니다 — 차광·포그를 우선하세요."
+    hints.append(verdict)
 
     return " / ".join(hints)
 
@@ -256,6 +279,25 @@ STATIONS = {}
 
 def read_api_key() -> str:
     return os.getenv("KMA_API_KEY", "")
+
+
+def to_outdoor_context(aws: dict) -> dict:
+    """fetch_aws() 원본 응답 → 환경 해석(env_calc.env_interpret) 등에서 쓰는
+    outdoor_* 필드 이름으로 매핑. ui/app.py의 기상 새로고침 핸들러와 동일한 매핑."""
+    return {
+        "obs_time":      aws.get("obs_time"),
+        "outdoor_temp":  aws.get("temp"),
+        "outdoor_rh":    aws.get("rh"),
+        "outdoor_vpd":   aws.get("vpd"),
+        "wind_speed":    aws.get("wind_speed"),
+        "wind_dir_kor":  aws.get("wind_dir_kor"),
+        "wind_dir_deg":  aws.get("wind_dir_deg"),
+        "precipitation": aws.get("rainfall_60m", 0),
+        "pty":           1 if aws.get("rainfall_60m", 0) > 0 else 0,
+        "pty_label":     "비" if aws.get("rainfall_60m", 0) > 0 else "",
+        "wf_kor":        f"AWS {aws.get('stn')}지점",
+        "source":        "KMA AWS",
+    }
 
 
 if __name__ == "__main__":

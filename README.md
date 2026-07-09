@@ -9,7 +9,13 @@ LLM과 임베딩은 전부 **로컬**(Ollama + BGE-M3)에서 동작합니다 —
 ## 아키텍처
 
 ```
-LLM (로컬 Ollama, gemma3:12b)
+React UI (frontend/, Vite)
+  └── FastAPI backend (backend/main.py)
+        ├── REST API routers (environment/growth/weather/prices/control/chat/diary)
+        ├── background jobs (backend/jobs.py)
+        └── scheduler (backend/scheduler.py)
+
+LLM (로컬 Ollama, gemma4:12b)
   ├── MCP Tools (agent/server.py, 실시간)
   │     ├── 온실 센서 / 시뮬레이터 (tools/simulator.py, tools/sensor_client.py)
   │     ├── 생육 데이터 CSV (tools/growth_data.py)
@@ -23,7 +29,7 @@ LLM (로컬 Ollama, gemma3:12b)
   └── RAG (rag/pipeline.py, BGE-M3 임베딩 + ChromaDB)
         └── knowledge_base/ (작물생리학 md + 농진청 재배 매뉴얼 PDF)
 
-ui/app.py — Streamlit 대시보드 (환경/생육/기상/제어/방제/AI 상담 6탭)
+ui/app.py — 레거시 Streamlit 대시보드 (React 이전 완료 전까지 병행 유지)
 ```
 
 ## 설치
@@ -35,12 +41,19 @@ pip install -r requirements.txt
 cp .env.example .env  # API 키 입력
 ```
 
+### React 프론트엔드
+
+```bash
+cd frontend
+npm install
+```
+
 ### 로컬 LLM (Ollama)
 
 ```bash
 brew install ollama
 ollama serve &
-ollama pull gemma3:12b
+ollama pull gemma4:12b
 ```
 
 ## 환경변수 (.env)
@@ -63,14 +76,26 @@ EMAIL_APP_PASSWORD=...
 # 1. 지식베이스 인덱싱 (최초 1회, 첫 실행 시 BGE-M3 다운로드로 수 분 소요)
 python -m rag.pipeline
 
-# 2. Streamlit 대시보드
-streamlit run ui/app.py
+# 2. FastAPI 백엔드 (레포 루트에서 실행)
+uvicorn backend.main:app --reload
 
-# 3. MCP 에이전트 CLI 대화
+# 3. React 프론트엔드 (다른 터미널)
+cd frontend
+npm run dev
+
+# 4. MCP 에이전트 CLI 대화
 python -m agent.agent "오늘 온실 상태 점검해줘"
 
-# 4. 주간 리포트 생성
+# 5. 주간 리포트 생성
 python -m reports.weekly_report
+```
+
+### 레거시 Streamlit 실행
+
+React 이전이 완료될 때까지 기존 Streamlit UI도 유지합니다.
+
+```bash
+streamlit run ui/app.py
 ```
 
 ## 도구 개별 테스트
@@ -95,6 +120,12 @@ python scripts/backtest_price.py
 
 ```
 greenhouse-ai/
+├── frontend/               # React + TypeScript + Vite UI
+│   └── src/
+├── backend/                # FastAPI API 서버
+│   ├── main.py
+│   ├── jobs.py
+│   └── routers/
 ├── tools/                  # 계산·API 도구 (각각 독립 실행 가능)
 │   ├── vpd_calculator.py
 │   ├── gdd_calculator.py
@@ -106,6 +137,7 @@ greenhouse-ai/
 │   ├── sensor_client.py    # 실 IoT API 또는 시뮬레이션
 │   ├── simulator.py        # MCP 서버용 센서 시뮬레이터
 │   ├── growth_data.py      # 생육 데이터 CSV
+│   ├── advisor.py          # 조치 제안 생성 + 이상 감지
 │   ├── notifier.py         # 이메일 경보
 │   └── sensor_simulator.py # (참고용, 미사용)
 ├── rag/
@@ -118,8 +150,8 @@ greenhouse-ai/
 │   ├── 01_temperature.md ~ 04_ventilation.md
 │   └── *.pdf                # 농진청 재배 매뉴얼 등 참고자료
 ├── ui/
-│   ├── app.py               # Streamlit 대시보드 (6탭)
-│   └── advisor.py           # 조치 제안 생성 + 이상 감지
+│   ├── app.py               # 레거시 Streamlit 대시보드
+│   └── advisor.py           # tools.advisor 호환 wrapper
 ├── reports/
 │   └── weekly_report.py
 └── scripts/

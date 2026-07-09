@@ -1,5 +1,6 @@
 """기상청 단기예보 API 래퍼"""
 import os
+import urllib.parse
 import requests
 from datetime import datetime, timedelta
 
@@ -19,10 +20,16 @@ def _get_base_time() -> tuple[str, str]:
 
 
 def get_short_forecast(nx: int, ny: int) -> list[dict]:
-    """단기예보 조회 (3일치)"""
-    api_key = os.getenv("KMA_API_KEY")
+    """단기예보 조회 (3일치).
+
+    data.go.kr 단기예보(getVilageFcst)는 aT 실시간 경매정보와 같은 data.go.kr
+    일반 인증키를 공유하므로 AT_API_KEY를 그대로 사용한다(KMA_API_KEY는
+    apihub.kma.go.kr AWS 실황 전용, 별도 키).
+    """
+    api_key = os.getenv("AT_API_KEY")
     if not api_key:
-        raise ValueError("KMA_API_KEY 환경변수가 없습니다")
+        raise ValueError("AT_API_KEY 환경변수가 없습니다")
+    api_key = urllib.parse.unquote(api_key)
 
     base_date, base_time = _get_base_time()
     params = {
@@ -46,7 +53,8 @@ def get_short_forecast(nx: int, ny: int) -> list[dict]:
         key = (item["fcstDate"], item["fcstTime"])
         if key not in result:
             result[key] = {"date": item["fcstDate"], "time": item["fcstTime"]}
-        if item["category"] in ("TMP", "REH", "POP", "TMX", "TMN"):
+        # TMP(기온) REH(습도) POP(강수확률) SKY(하늘상태/운량) PTY(강수형태) WSD(풍속)
+        if item["category"] in ("TMP", "REH", "POP", "TMX", "TMN", "SKY", "PTY", "WSD"):
             result[key][item["category"]] = item["fcstValue"]
 
     return sorted(result.values(), key=lambda x: (x["date"], x["time"]))

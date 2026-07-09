@@ -239,8 +239,17 @@ export interface DailyPriceHistory {
 }
 
 export interface DailyGradeHistory {
+  markets: string[];
   grades: string[];
-  chart: Record<string, string | number>[];
+  by_market: Record<string, Record<string, string | number>[]>;
+  start: string;
+  end: string;
+}
+
+export interface DailyPriceByYear {
+  markets: string[];
+  years: string[];
+  by_market: Record<string, Record<string, string | number>[]>;
   start: string;
   end: string;
 }

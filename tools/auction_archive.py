@@ -405,12 +405,13 @@ def daily_price_history(start: date, end: date, min_count: int = 1) -> dict:
 
 
 def daily_grade_history(start: date, end: date) -> dict:
-    """지정 기간의 일자별 상/중/하 등급 추정가(4kg 환산) — daily_price_history의 등급별 버전.
+    """지정 기간의 시장별·일자별 상/중/하 등급 추정가(4kg 환산) — daily_price_history의
+    등급별 버전. 시장×등급을 함께 보고 싶다는 요청(2026-07-10)에 맞춰 시장 단위로 나눈다.
 
     원본 경매 데이터엔 실제 "품종 등급" 필드가 없다(익산 제외 3개 시장 전부 품종은
     "완숙토마토"로 동일) — grade_avg_for_date()/tools/at_client._compute_grades와 같은
-    방식으로, 하루치 전체 거래(3개 시장 통합)를 kg당 가격 기준 3등분(상/중/하 tercile)해
-    추정한다. 실제 등급 판정이 아니라 상대적 가격 구간 추정치임에 유의.
+    방식으로, 시장별 하루 거래를 kg당 가격 기준 3등분(상/중/하 tercile)해 추정한다.
+    실제 등급 판정이 아니라 그 시장·그날의 상대적 가격 구간 추정치임에 유의.
     """
     if end < start:
         start, end = end, start
@@ -418,7 +419,7 @@ def daily_grade_history(start: date, end: date) -> dict:
         start = end - timedelta(days=MAX_DAILY_RANGE_DAYS)
 
     rows = _read_rows()
-    by_day: dict[str, list[float]] = {}
+    by_market_day: dict[tuple[str, str], list[float]] = {}
     for row in rows:
         d_raw = row.get("거래일자", "")
         try:
@@ -430,27 +431,110 @@ def daily_grade_history(start: date, end: date) -> dict:
         ppk = _price_per_kg(row)
         if ppk is None:
             continue
-        by_day.setdefault(d_raw, []).append(ppk)
+        market = row.get("도매시장") or "시장 미상"
+        by_market_day.setdefault((market, d_raw), []).append(ppk)
 
-    chart = []
-    for d in sorted(by_day):
-        prices = sorted(by_day[d])
-        n = len(prices)
-        if n < 3:
-            continue
-        t1 = max(n // 3, 1)
-        t2 = max(2 * n // 3, t1)
-        bot, mid, top = prices[:t1], prices[t1:t2] or prices, prices[t2:] or prices[-1:]
-        chart.append({
-            "날짜": d,
-            "상": round(mean(top) * 4),
-            "중": round(mean(mid) * 4),
-            "하": round(mean(bot) * 4),
-        })
+    markets = sorted({m for (m, _d) in by_market_day})
+    by_market: dict[str, list[dict]] = {}
+    for market in markets:
+        days = sorted(d for (m, d) in by_market_day if m == market)
+        chart = []
+        for d in days:
+            prices = sorted(by_market_day[(market, d)])
+            n = len(prices)
+            if n < 3:
+                continue
+            t1 = max(n // 3, 1)
+            t2 = max(2 * n // 3, t1)
+            bot, mid, top = prices[:t1], prices[t1:t2] or prices, prices[t2:] or prices[-1:]
+            chart.append({
+                "날짜": d,
+                "상": round(mean(top) * 4),
+                "중": round(mean(mid) * 4),
+                "하": round(mean(bot) * 4),
+            })
+        by_market[market] = chart
 
     return {
+        "markets": markets,
         "grades": ["상", "중", "하"],
-        "chart": chart,
+        "by_market": by_market,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+    }
+
+
+def _same_month_day(base: date, year: int) -> date | None:
+    """base와 같은 월-일을 year로 옮긴 날짜. 2/29처럼 해당 연도에 없는 날짜는 None."""
+    try:
+        return base.replace(year=year)
+    except ValueError:
+        return None
+
+
+def daily_price_by_year(start: date, end: date, min_count: int = 1) -> dict:
+    """일자별 확대 차트의 연도별 보기 — 시장별 미니차트는 그대로 두고, 고른 기간의
+    월-일 구간을 아카이브에 있는 모든 연도에 겹쳐 그린다(요청, 2026-07-10).
+    예: 5/10~7/9를 고르면 2021~2026년 각각의 5/10~7/9 구간을 시장별로 겹쳐본다.
+    """
+    if end < start:
+        start, end = end, start
+    span_days = min((end - start).days, MAX_DAILY_RANGE_DAYS)
+
+    rows = _read_rows()
+    years: set[int] = set()
+    for row in rows:
+        try:
+            years.add(date.fromisoformat(row.get("거래일자", "")).year)
+        except ValueError:
+            continue
+    years = sorted(years)
+
+    # year_starts[y] = 그 해의 시작일(월-일 동일), None이면 그 해엔 존재 안 하는 날짜(윤년 2/29)
+    year_starts = {y: _same_month_day(start, y) for y in years}
+
+    by_market_offset_year: dict[tuple[str, int, int], list[float]] = {}
+    offset_label: dict[int, str] = {}
+
+    for row in rows:
+        d_raw = row.get("거래일자", "")
+        try:
+            d = date.fromisoformat(d_raw)
+        except ValueError:
+            continue
+        ppk = _price_per_kg(row)
+        if ppk is None:
+            continue
+        market = row.get("도매시장") or "시장 미상"
+        for y in years:
+            y_start = year_starts[y]
+            if y_start is None:
+                continue
+            offset = (d - y_start).days
+            if 0 <= offset <= span_days:
+                by_market_offset_year.setdefault((market, offset, y), []).append(ppk)
+                offset_label.setdefault(offset, (start + timedelta(days=offset)).strftime("%m-%d"))
+
+    markets = sorted({m for (m, _o, _y) in by_market_offset_year})
+    by_market: dict[str, list[dict]] = {}
+    for market in markets:
+        chart = []
+        for offset in range(0, span_days + 1):
+            entry: dict = {"월일": offset_label.get(offset, f"D+{offset}")}
+            has_any = False
+            for y in years:
+                vals = by_market_offset_year.get((market, offset, y), [])
+                if len(vals) >= min_count:
+                    entry[str(y)] = round(median(vals) * 4)
+                    has_any = True
+            if has_any:
+                chart.append(entry)
+        by_market[market] = chart
+
+    return {
+        "markets": markets,
+        "years": [str(y) for y in years],
+        "by_market": by_market,
         "start": start.isoformat(),
         "end": end.isoformat(),
     }

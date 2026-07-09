@@ -132,6 +132,23 @@ def get_daily_grade_history(start: str, end: str) -> dict:
     )
 
 
+@router.get("/daily-price-by-year")
+def get_daily_price_by_year(start: str, end: str, min_count: int = 1) -> dict:
+    """일자별 확대 차트의 연도별 보기 — 시장별 미니차트에서 고른 월-일 구간을
+    아카이브 전 연도에 겹쳐본다."""
+    from datetime import date as _date
+
+    from tools.auction_archive import daily_price_by_year
+
+    start_d = _date.fromisoformat(start)
+    end_d = _date.fromisoformat(end)
+    min_count = min(max(min_count, 1), 30)
+    return cached(
+        f"prices_daily_by_year_{start}_{end}_{min_count}", ttl_seconds=3600,
+        fn=lambda: daily_price_by_year(start_d, end_d, min_count=min_count),
+    )
+
+
 @router.get("/harvest-strategy")
 def harvest_strategy(horizon_days: int = 14, grade: str = "중") -> dict:
     from tools.growth_data import assess_growth

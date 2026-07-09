@@ -96,7 +96,7 @@ function PriceInfoSection() {
   const [open, setOpen] = useState(false);
   const [dailyOpen, setDailyOpen] = useState(false);
   const [dailyRange, setDailyRange] = useState(defaultDailyRange);
-  const [dailyMode, setDailyMode] = useState<"시장별" | "등급별">("시장별");
+  const [dailyMode, setDailyMode] = useState<"가격" | "등급별" | "연도별">("가격");
   const [monthlyMode, setMonthlyMode] = useState<"시장별" | "연도별" | "등급별">("시장별");
   const gradesQ = useQuery({ queryKey: ["chat-price-grades"], queryFn: pricesApi.grades, enabled: open });
   const cycleQ = useQuery({
@@ -112,12 +112,17 @@ function PriceInfoSection() {
   const dailyQ = useQuery({
     queryKey: ["chat-price-daily", dailyRange.start, dailyRange.end],
     queryFn: () => pricesApi.dailyPriceHistory(dailyRange.start, dailyRange.end),
-    enabled: open && dailyOpen && dailyMode === "시장별",
+    enabled: open && dailyOpen && dailyMode === "가격",
   });
   const dailyGradeQ = useQuery({
     queryKey: ["chat-price-daily-grade", dailyRange.start, dailyRange.end],
     queryFn: () => pricesApi.dailyGradeHistory(dailyRange.start, dailyRange.end),
     enabled: open && dailyOpen && dailyMode === "등급별",
+  });
+  const dailyYearQ = useQuery({
+    queryKey: ["chat-price-daily-year", dailyRange.start, dailyRange.end],
+    queryFn: () => pricesApi.dailyPriceByYear(dailyRange.start, dailyRange.end),
+    enabled: open && dailyOpen && dailyMode === "연도별",
   });
 
   return (
@@ -249,7 +254,7 @@ function PriceInfoSection() {
                           />
                         </label>
                         <div style={{ display: "flex", gap: 4 }}>
-                          {(["시장별", "등급별"] as const).map((m) => (
+                          {(["가격", "등급별", "연도별"] as const).map((m) => (
                             <button
                               key={m}
                               className="btn"
@@ -260,50 +265,119 @@ function PriceInfoSection() {
                             </button>
                           ))}
                         </div>
-                        <span style={{ fontSize: 15, color: "var(--color-text-muted)" }}>최대 400일 구간까지 한 번에 표시됩니다.</span>
+                        <span style={{ fontSize: 15, color: "var(--color-text-muted)" }}>최대 400일 구간까지 한 번에 표시됩니다. 항상 시장별 미니차트로 나뉩니다.</span>
                       </div>
                       {dailyMode === "등급별" && (
                         <p style={{ fontSize: 15, color: "var(--color-text-muted)", marginBottom: 6 }}>
-                          원본 데이터엔 실제 품종 등급 필드가 없어(전 시장 품종 동일), 하루 거래를 가격 기준 3등분한 추정치입니다 — 공식 등급 판정이 아닙니다.
+                          원본 데이터엔 실제 품종 등급 필드가 없어(전 시장 품종 동일), 시장별로 하루 거래를 가격 기준 3등분한 추정치입니다 — 공식 등급 판정이 아닙니다.
                         </p>
                       )}
-                      {dailyMode === "시장별" ? (
-                        dailyQ.isLoading ? (
-                          <LoadingState />
-                        ) : dailyQ.data && dailyQ.data.chart.length > 0 ? (
-                          <ResponsiveContainer width="100%" height={240}>
-                            <LineChart data={dailyQ.data.chart}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                              <XAxis dataKey="날짜" tick={{ fontSize: 13 }} minTickGap={40} />
-                              <YAxis tick={{ fontSize: 15 }} />
-                              <Tooltip />
-                              <Legend />
-                              {dailyQ.data.markets.map((m) => (
-                                <Line key={m} type="monotone" dataKey={m} name={m} stroke={MARKET_COLORS[m] ?? "#333"} dot={false} strokeWidth={1.5} />
-                              ))}
-                            </LineChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <p style={{ fontSize: 18, color: "var(--color-text-muted)" }}>이 기간에는 거래 기록이 없습니다.</p>
-                        )
-                      ) : dailyGradeQ.isLoading ? (
-                        <LoadingState />
-                      ) : dailyGradeQ.data && dailyGradeQ.data.chart.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={240}>
-                          <LineChart data={dailyGradeQ.data.chart}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                            <XAxis dataKey="날짜" tick={{ fontSize: 13 }} minTickGap={40} />
-                            <YAxis tick={{ fontSize: 15 }} />
-                            <Tooltip />
-                            <Legend />
-                            {dailyGradeQ.data.grades.map((g) => (
-                              <Line key={g} type="monotone" dataKey={g} name={`${g}품`} stroke={GRADE_COLORS[g] ?? "#333"} dot={false} strokeWidth={1.5} />
-                            ))}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <p style={{ fontSize: 18, color: "var(--color-text-muted)" }}>이 기간에는 거래 기록이 없습니다.</p>
+                      {dailyMode === "연도별" && (
+                        <p style={{ fontSize: 15, color: "var(--color-text-muted)", marginBottom: 6 }}>
+                          고른 기간의 월-일 구간을 아카이브에 있는 연도(2021~2026)에 겹쳐 그립니다 — 예: 5/10 선택 시 매년 5/10끼리 비교.
+                        </p>
                       )}
+                      {(() => {
+                        if (dailyMode === "가격") {
+                          if (dailyQ.isLoading) return <LoadingState />;
+                          if (!dailyQ.data || dailyQ.data.markets.length === 0) {
+                            return <p style={{ fontSize: 18, color: "var(--color-text-muted)" }}>이 기간에는 거래 기록이 없습니다.</p>;
+                          }
+                          return (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                              {dailyQ.data.markets.map((market) => {
+                                const marketChart = dailyQ.data!.chart
+                                  .filter((row) => row[market] != null)
+                                  .map((row) => ({ 날짜: row["날짜"], 가격: row[market] }));
+                                return (
+                                  <div key={market}>
+                                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, textAlign: "center" }}>{market}</div>
+                                    {marketChart.length > 0 ? (
+                                      <ResponsiveContainer width="100%" height={200}>
+                                        <LineChart data={marketChart}>
+                                          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                          <XAxis dataKey="날짜" tick={{ fontSize: 11 }} minTickGap={30} />
+                                          <YAxis tick={{ fontSize: 13 }} />
+                                          <Tooltip />
+                                          <Line type="monotone" dataKey="가격" name={market} stroke={MARKET_COLORS[market] ?? "#333"} dot={false} strokeWidth={1.5} />
+                                        </LineChart>
+                                      </ResponsiveContainer>
+                                    ) : (
+                                      <p style={{ fontSize: 16, color: "var(--color-text-muted)", textAlign: "center" }}>데이터 없음</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+                        if (dailyMode === "등급별") {
+                          if (dailyGradeQ.isLoading) return <LoadingState />;
+                          if (!dailyGradeQ.data || dailyGradeQ.data.markets.length === 0) {
+                            return <p style={{ fontSize: 18, color: "var(--color-text-muted)" }}>이 기간에는 거래 기록이 없습니다.</p>;
+                          }
+                          return (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                              {dailyGradeQ.data.markets.map((market) => {
+                                const marketChart = dailyGradeQ.data!.by_market[market] ?? [];
+                                return (
+                                  <div key={market}>
+                                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, textAlign: "center" }}>{market}</div>
+                                    {marketChart.length > 0 ? (
+                                      <ResponsiveContainer width="100%" height={200}>
+                                        <LineChart data={marketChart}>
+                                          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                          <XAxis dataKey="날짜" tick={{ fontSize: 11 }} minTickGap={30} />
+                                          <YAxis tick={{ fontSize: 13 }} />
+                                          <Tooltip />
+                                          <Legend wrapperStyle={{ fontSize: 13 }} />
+                                          {dailyGradeQ.data!.grades.map((g) => (
+                                            <Line key={g} type="monotone" dataKey={g} name={`${g}품`} stroke={GRADE_COLORS[g] ?? "#333"} dot={false} strokeWidth={1.5} />
+                                          ))}
+                                        </LineChart>
+                                      </ResponsiveContainer>
+                                    ) : (
+                                      <p style={{ fontSize: 16, color: "var(--color-text-muted)", textAlign: "center" }}>데이터 없음</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+                        if (dailyYearQ.isLoading) return <LoadingState />;
+                        if (!dailyYearQ.data || dailyYearQ.data.markets.length === 0) {
+                          return <p style={{ fontSize: 18, color: "var(--color-text-muted)" }}>이 기간에는 거래 기록이 없습니다.</p>;
+                        }
+                        return (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                            {dailyYearQ.data.markets.map((market) => {
+                              const marketChart = dailyYearQ.data!.by_market[market] ?? [];
+                              return (
+                                <div key={market}>
+                                  <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, textAlign: "center" }}>{market}</div>
+                                  {marketChart.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height={200}>
+                                      <LineChart data={marketChart}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="월일" tick={{ fontSize: 11 }} minTickGap={30} />
+                                        <YAxis tick={{ fontSize: 13 }} />
+                                        <Tooltip />
+                                        <Legend wrapperStyle={{ fontSize: 13 }} />
+                                        {dailyYearQ.data!.years.map((y) => (
+                                          <Line key={y} type="monotone" dataKey={y} name={`${y}년`} stroke={YEAR_COLORS[y] ?? "#333"} dot={false} strokeWidth={1.5} connectNulls />
+                                        ))}
+                                      </LineChart>
+                                    </ResponsiveContainer>
+                                  ) : (
+                                    <p style={{ fontSize: 16, color: "var(--color-text-muted)", textAlign: "center" }}>데이터 없음</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

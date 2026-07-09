@@ -3,6 +3,7 @@ import type {
   AllGrades,
   AuctionArchiveSummary,
   DailyGradeHistory,
+  DailyPriceByYear,
   DailyPriceHistory,
   GradesByMarket,
   MonthlySeasonalCycle,
@@ -34,6 +35,8 @@ export const pricesApi = {
     api.get<DailyPriceHistory>("/prices/daily-price-history", { start, end, min_count }),
   dailyGradeHistory: (start: string, end: string) =>
     api.get<DailyGradeHistory>("/prices/daily-grade-history", { start, end }),
+  dailyPriceByYear: (start: string, end: string, min_count = 1) =>
+    api.get<DailyPriceByYear>("/prices/daily-price-by-year", { start, end, min_count }),
   harvestStrategy: (horizon_days = 14, grade = "중") =>
     api.get<HarvestStrategy>("/prices/harvest-strategy", { horizon_days, grade }),
   historyLong: (live = false) =>

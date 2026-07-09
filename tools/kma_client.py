@@ -9,6 +9,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+from tools.demo_clock import demo_now
+
 # AWS 매분자료 조회 — apihub.kma.go.kr > 지상관측 > 방재기상관측(AWS)
 # 실제 프록시 경로: /api/typ01/cgi-bin/url/nph-aws2_min
 AWS_BASE = "https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-aws2_min"
@@ -179,7 +181,11 @@ def fetch_aws(
     stn: int | None = None,
     api_key: str | None = None,
 ) -> dict:
-    """Fetch real-time AWS 1-minute observation from KMA API Hub.
+    """Fetch AWS 1-minute observation from KMA API Hub — 발표용 고정 날짜(tools.demo_clock)
+    기준으로 조회한다. AWS는 과거 실측 아카이브도 그대로 보관하고 있어(2026-07-10
+    확인) 이 조회가 실제로 그 날짜의 실측치를 반환한다 — sensor_client.py의 온실
+    센서와 "오늘"을 맞추기 위함(사용자 확인). 단기예보(get_short_forecast)는 그
+    시점 발표분만 존재하는 상품이라 여기 적용하지 않는다.
 
     Endpoint: /cgi-bin/url/nph-aws2_min (AWS 매분자료 조회)
     Parameters: tm1/tm2 (YYYYMMDDHHMM), stn (지점번호), authKey
@@ -189,7 +195,7 @@ def fetch_aws(
         raise RuntimeError("KMA_API_KEY가 .env에 설정되지 않았습니다.")
 
     stn_no = stn or int(os.getenv("KMA_AWS_STN", "285"))
-    now = datetime.now()
+    now = demo_now()
     # 최근 10분 구간 — 결측 분이 있어도 직전 유효값 사용
     tm2 = now.replace(second=0, microsecond=0)
     tm1 = tm2 - timedelta(minutes=10)

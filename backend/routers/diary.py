@@ -139,7 +139,14 @@ _PLAN_CHECK_CACHE: dict[str, str] = {}
 
 @router.get("/plan-check/upcoming")
 def upcoming_plan() -> dict | None:
-    """앞으로 60일 내 가장 가까운, 내용이 있는 일정을 찾아 반환."""
+    """앞으로 60일 내 가장 가까운, 내용이 있는 일정을 찾아 반환.
+
+    발표용 고정 날짜(tools/demo_clock)를 일부러 안 쓴다 — 영농일지는 실제 시간
+    기준으로 쌓인 완료 기록이라, "오늘=2026-05-18"로 맞추면 7월에 실제로 끝난
+    방제·수확 기록이 "다가오는 계획"으로 잘못 표시된다(2026-07-10 확인 — 진딧물
+    방제 완료 기록이 "45일 후 계획"처럼 보임). 이 기능만 실제 오늘 기준으로
+    두면 그런 항목이 안 나온다.
+    """
     entries = diary_data.load_all()
     today_str = date.today().isoformat()
     cutoff = (date.today() + timedelta(days=60)).isoformat()
@@ -199,8 +206,10 @@ def submit_plan_check_feedback(body: PlanCheckFeedbackIn) -> dict:
 
 class NutrientRecipeIn(BaseModel):
     date: str
-    recipe: dict
+    recipe: dict = {}
     symptom: str = ""
+    mix: list[dict] | None = None  # [{"product": str, "grams": float}, ...]
+    water_liters: float | None = None
 
 
 @router.get("/nutrient")
@@ -212,7 +221,7 @@ def get_nutrient(date_str: str | None = None, flat_limit: int | None = None) -> 
 
 @router.post("/nutrient")
 def add_nutrient(body: NutrientRecipeIn) -> dict:
-    idx = nutrient_log.add_entry(body.date, body.recipe, body.symptom)
+    idx = nutrient_log.add_entry(body.date, body.recipe, body.symptom, mix=body.mix, water_liters=body.water_liters)
     return {"idx": idx}
 
 
@@ -221,3 +230,36 @@ def analyze_nutrient(date_str: str, idx: int, body: NutrientRecipeIn) -> dict:
     from backend.jobs_impl import run_nutrient_analysis
     job_id = jobs.create_job(run_nutrient_analysis, date_str, idx, body.recipe, body.symptom)
     return {"job_id": job_id}
+
+
+# ---------------------------------------------------------------------------
+# 비료 제품 DB — 그램수 → ppm 환산용 보증성분표
+# ---------------------------------------------------------------------------
+
+@router.get("/fertilizer-products")
+def list_fertilizer_products() -> dict:
+    from tools.fertilizer_db import all_products
+    return all_products()
+
+
+class FertilizerProductIn(BaseModel):
+    name: str
+    n: float = 0.0
+    p2o5: float = 0.0
+    k2o: float = 0.0
+    cao: float = 0.0
+    mgo: float = 0.0
+
+
+@router.post("/fertilizer-products")
+def add_fertilizer_product(body: FertilizerProductIn) -> dict:
+    from tools.fertilizer_db import register_product
+    register_product(body.name, body.n, body.p2o5, body.k2o, body.cao, body.mgo)
+    return {"ok": True}
+
+
+@router.delete("/fertilizer-products/{name}")
+def remove_fertilizer_product(name: str) -> dict:
+    from tools.fertilizer_db import delete_product
+    delete_product(name)
+    return {"ok": True}

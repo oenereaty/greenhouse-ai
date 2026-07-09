@@ -214,6 +214,37 @@ export interface OriginMarketCycle {
   market_summary: MarketSummaryRow[];
 }
 
+export interface MonthlySeasonalCycleRange {
+  "연도수": number;
+  "최소": number;
+  "최대": number;
+}
+
+export interface MonthlySeasonalCycle {
+  markets: string[];
+  chart: Record<string, string | number>[];
+  combined_4kg: Record<string, number>;
+  combined_range_4kg: Record<string, MonthlySeasonalCycleRange>;
+  year_range: string | null;
+  years: string[];
+  year_chart: Record<string, string | number>[];
+  grade_chart: Record<string, string | number>[];
+}
+
+export interface DailyPriceHistory {
+  markets: string[];
+  chart: Record<string, string | number>[];
+  start: string;
+  end: string;
+}
+
+export interface DailyGradeHistory {
+  grades: string[];
+  chart: Record<string, string | number>[];
+  start: string;
+  end: string;
+}
+
 export interface GradeInfo {
   price: number;
   price_kg: number;
@@ -432,6 +463,7 @@ export interface SystemConfig {
   has_ncpms_key: boolean;
   has_naver_keys: boolean;
   has_email_config: boolean;
+  today: string;
 }
 
 export interface SystemHealth {

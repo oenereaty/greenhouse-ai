@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { CartesianGrid, Line, LineChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { chatApi } from "../api/chat";
 import { pricesApi } from "../api/prices";
 import { AiText, JobButton, LoadingState, cleanAiText } from "../components/common";
 import { useJobPoll } from "../hooks/useJobPoll";
+
+const MARKET_COLORS: Record<string, string> = { "전주": "#3D7CF4", "대전오정": "#e67700", "대전노은": "#2f9e44" };
+const GRADE_COLORS: Record<string, string> = { "상": "#c92a2a", "중": "#e67700", "하": "#2f9e44" };
+const YEAR_COLORS: Record<string, string> = {
+  "2021": "#adb5bd", "2022": "#868e96", "2023": "#3D7CF4",
+  "2024": "#862e9c", "2025": "#e67700", "2026": "#2f9e44",
+};
 
 function fmtWon(n: number | null | undefined) {
   return n ? `${n.toLocaleString()}원` : "—";
@@ -76,13 +84,40 @@ function ImageDiagnosisSection() {
   );
 }
 
+function defaultDailyRange() {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 60);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { start: fmt(start), end: fmt(end) };
+}
+
 function PriceInfoSection() {
   const [open, setOpen] = useState(false);
+  const [dailyOpen, setDailyOpen] = useState(false);
+  const [dailyRange, setDailyRange] = useState(defaultDailyRange);
+  const [dailyMode, setDailyMode] = useState<"시장별" | "등급별">("시장별");
+  const [monthlyMode, setMonthlyMode] = useState<"시장별" | "연도별" | "등급별">("시장별");
   const gradesQ = useQuery({ queryKey: ["chat-price-grades"], queryFn: pricesApi.grades, enabled: open });
   const cycleQ = useQuery({
     queryKey: ["chat-price-cycle"],
     queryFn: () => pricesApi.originMarketCycle(180, 3),
     enabled: open,
+  });
+  const seasonalQ = useQuery({
+    queryKey: ["chat-price-seasonal"],
+    queryFn: pricesApi.monthlySeasonalCycle,
+    enabled: open,
+  });
+  const dailyQ = useQuery({
+    queryKey: ["chat-price-daily", dailyRange.start, dailyRange.end],
+    queryFn: () => pricesApi.dailyPriceHistory(dailyRange.start, dailyRange.end),
+    enabled: open && dailyOpen && dailyMode === "시장별",
+  });
+  const dailyGradeQ = useQuery({
+    queryKey: ["chat-price-daily-grade", dailyRange.start, dailyRange.end],
+    queryFn: () => pricesApi.dailyGradeHistory(dailyRange.start, dailyRange.end),
+    enabled: open && dailyOpen && dailyMode === "등급별",
   });
 
   return (
@@ -133,6 +168,145 @@ function PriceInfoSection() {
                     ))}
                   </div>
                 </>
+              )}
+              {seasonalQ.data && seasonalQ.data.chart.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ fontWeight: 600 }}>
+                      전주·대전 월별 계절 사이클 ({seasonalQ.data.year_range} 실거래, 4kg 환산 중앙값)
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {(["시장별", "연도별", "등급별"] as const).map((m) => (
+                        <button
+                          key={m}
+                          className="btn"
+                          style={{ padding: "4px 10px", fontSize: 15, background: monthlyMode === m ? "var(--color-primary)" : undefined, color: monthlyMode === m ? "#fff" : undefined }}
+                          onClick={() => setMonthlyMode(m)}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 18, color: "var(--color-text-muted)", marginBottom: 8 }}>
+                    {monthlyMode === "시장별"
+                      ? "과거 여러 해 평균이며 미래 예측이 아닙니다 — 연도별 변동폭이 클 수 있습니다."
+                      : monthlyMode === "연도별"
+                        ? "3개 시장을 통합한 값이며, 연도마다 곡선이 얼마나 다른지(변동성) 보는 용도입니다."
+                        : "3개 시장·전 연도를 통합해 월별로 가격을 3등분(상/중/하)한 추정치입니다 — 원본에 실제 품종 등급 필드가 없어 공식 등급 판정은 아닙니다."}
+                  </p>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart
+                      data={
+                        monthlyMode === "시장별" ? seasonalQ.data.chart
+                        : monthlyMode === "연도별" ? seasonalQ.data.year_chart
+                        : seasonalQ.data.grade_chart
+                      }
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                      <XAxis dataKey="월" tick={{ fontSize: 15 }} />
+                      <YAxis tick={{ fontSize: 15 }} />
+                      <Tooltip />
+                      <Legend />
+                      {monthlyMode === "시장별"
+                        ? seasonalQ.data.markets.map((m) => (
+                            <Line key={m} type="monotone" dataKey={m} name={m} stroke={MARKET_COLORS[m] ?? "#333"} dot />
+                          ))
+                        : monthlyMode === "연도별"
+                          ? seasonalQ.data.years.map((y) => (
+                              <Line key={y} type="monotone" dataKey={y} name={`${y}년`} stroke={YEAR_COLORS[y] ?? "#333"} dot />
+                            ))
+                          : ["상", "중", "하"].map((g) => (
+                              <Line key={g} type="monotone" dataKey={g} name={`${g}품`} stroke={GRADE_COLORS[g] ?? "#333"} dot />
+                            ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <button className="btn" style={{ marginTop: 8 }} onClick={() => setDailyOpen((v) => !v)}>
+                    {dailyOpen ? "일자별 보기 접기" : "확대해서 일자별로 보기"}
+                  </button>
+                  {dailyOpen && (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 8 }}>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 16 }}>
+                          시작일
+                          <input
+                            type="date"
+                            value={dailyRange.start}
+                            min="2021-01-01"
+                            max={dailyRange.end}
+                            onChange={(e) => setDailyRange({ ...dailyRange, start: e.target.value })}
+                            style={{ padding: 6, borderRadius: 6, border: "1px solid var(--color-border)" }}
+                          />
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 16 }}>
+                          종료일
+                          <input
+                            type="date"
+                            value={dailyRange.end}
+                            min={dailyRange.start}
+                            onChange={(e) => setDailyRange({ ...dailyRange, end: e.target.value })}
+                            style={{ padding: 6, borderRadius: 6, border: "1px solid var(--color-border)" }}
+                          />
+                        </label>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {(["시장별", "등급별"] as const).map((m) => (
+                            <button
+                              key={m}
+                              className="btn"
+                              style={{ padding: "4px 10px", fontSize: 15, background: dailyMode === m ? "var(--color-primary)" : undefined, color: dailyMode === m ? "#fff" : undefined }}
+                              onClick={() => setDailyMode(m)}
+                            >
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                        <span style={{ fontSize: 15, color: "var(--color-text-muted)" }}>최대 400일 구간까지 한 번에 표시됩니다.</span>
+                      </div>
+                      {dailyMode === "등급별" && (
+                        <p style={{ fontSize: 15, color: "var(--color-text-muted)", marginBottom: 6 }}>
+                          원본 데이터엔 실제 품종 등급 필드가 없어(전 시장 품종 동일), 하루 거래를 가격 기준 3등분한 추정치입니다 — 공식 등급 판정이 아닙니다.
+                        </p>
+                      )}
+                      {dailyMode === "시장별" ? (
+                        dailyQ.isLoading ? (
+                          <LoadingState />
+                        ) : dailyQ.data && dailyQ.data.chart.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={dailyQ.data.chart}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                              <XAxis dataKey="날짜" tick={{ fontSize: 13 }} minTickGap={40} />
+                              <YAxis tick={{ fontSize: 15 }} />
+                              <Tooltip />
+                              <Legend />
+                              {dailyQ.data.markets.map((m) => (
+                                <Line key={m} type="monotone" dataKey={m} name={m} stroke={MARKET_COLORS[m] ?? "#333"} dot={false} strokeWidth={1.5} />
+                              ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <p style={{ fontSize: 18, color: "var(--color-text-muted)" }}>이 기간에는 거래 기록이 없습니다.</p>
+                        )
+                      ) : dailyGradeQ.isLoading ? (
+                        <LoadingState />
+                      ) : dailyGradeQ.data && dailyGradeQ.data.chart.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={240}>
+                          <LineChart data={dailyGradeQ.data.chart}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                            <XAxis dataKey="날짜" tick={{ fontSize: 13 }} minTickGap={40} />
+                            <YAxis tick={{ fontSize: 15 }} />
+                            <Tooltip />
+                            <Legend />
+                            {dailyGradeQ.data.grades.map((g) => (
+                              <Line key={g} type="monotone" dataKey={g} name={`${g}품`} stroke={GRADE_COLORS[g] ?? "#333"} dot={false} strokeWidth={1.5} />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <p style={{ fontSize: 18, color: "var(--color-text-muted)" }}>이 기간에는 거래 기록이 없습니다.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
               <p style={{ fontSize: 19, color: "var(--color-text-muted)" }}>
                 산지별 프리미엄·물류비 비교, 판매 시점 제안 등 자세한 건 아래 채팅에 물어보세요 — 예: "가격 상황 보고 오늘 출하가 나은지 알려줘"
@@ -315,10 +489,7 @@ function FreeChatSection() {
 
   return (
     <div className="card">
-      <h3 style={{ fontSize: 22, marginBottom: 4 }}>AI 상담 (MCP 에이전트)</h3>
-      <p style={{ fontSize: 19.5, color: "var(--color-text-muted)", marginBottom: 14 }}>
-        현재 센서값·외기 조건·지식베이스에 더해, 필요시 Ollama가 센서·생육·진단이력·가격 도구를 직접 호출해 답변합니다.
-      </p>
+      <h3 style={{ fontSize: 22, marginBottom: 4 }}>AI 상담</h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14, maxHeight: 420, overflowY: "auto" }}>
         {history.map((m, i) => (

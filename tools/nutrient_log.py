@@ -4,9 +4,16 @@
     { "YYYY-MM-DD": [
         {"time": "HH:MM", "recipe": {"n": float, "p": float, "k": float,
          "ca": float, "mg": float, "ec": float, "ph": float},
+         "mix": [{"product": str, "grams": float}, ...] | None,
+         "water_liters": float | None,
          "symptom": str, "ai_analysis": str, "updated": "YYYY-MM-DD"},
         ...
     ] }
+
+mix·water_liters가 주어지면 n/p/k/ca/mg는 tools.fertilizer_db.compute_ppm()으로
+계산해 recipe에 채운다(포대 그램수 → ppm 환산). mix 없이 recipe를 직접 준
+과거 방식(ppm 직접 입력)도 그대로 지원한다 — 그때는 recipe를 그대로 저장한다.
+ec/ph는 두 방식 모두 실측값이라 계산 대상이 아니다.
 """
 import json
 from datetime import date, datetime
@@ -49,12 +56,36 @@ def flat_entries(limit: int | None = None) -> list:
     return rows[:limit] if limit else rows
 
 
-def add_entry(date_str: str, recipe: dict, symptom: str = "", ai_analysis: str = "") -> int:
-    """해당 날짜에 양액 조성 기록 1건 추가. 추가된 항목의 인덱스를 반환."""
+def add_entry(
+    date_str: str,
+    recipe: dict,
+    symptom: str = "",
+    ai_analysis: str = "",
+    mix: list[dict] | None = None,
+    water_liters: float | None = None,
+) -> int:
+    """해당 날짜에 양액 조성 기록 1건 추가. 추가된 항목의 인덱스를 반환.
+
+    mix가 주어지면 fertilizer_db.compute_ppm()으로 n/p/k/ca/mg를 계산해 recipe에
+    덮어쓴다(ec/ph는 recipe에 실측값으로 그대로 둔다). DB에 없는 제품은 계산에서
+    빠지고 ai_analysis 없이도 확인 가능하도록 recipe["unknown_products"]에 남는다.
+    """
+    if mix:
+        from tools.fertilizer_db import compute_ppm
+        computed = compute_ppm(mix, water_liters or 0)
+        recipe = {**(recipe or {})}
+        for k in ("n", "p", "k", "ca", "mg"):
+            if computed.get(k) is not None:
+                recipe[k] = computed[k]
+        if computed.get("unknown_products"):
+            recipe["unknown_products"] = computed["unknown_products"]
+
     data = _read()
     entry = {
         "time": datetime.now().strftime("%H:%M"),
         "recipe": recipe,
+        "mix": mix or None,
+        "water_liters": water_liters,
         "symptom": symptom or "",
         "ai_analysis": ai_analysis or "",
         "updated": date.today().isoformat(),

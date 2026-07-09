@@ -2,7 +2,10 @@ import { api } from "./client";
 import type {
   AllGrades,
   AuctionArchiveSummary,
+  DailyGradeHistory,
+  DailyPriceHistory,
   GradesByMarket,
+  MonthlySeasonalCycle,
   OriginMarketCycle,
   PriceBoard,
   PriceBriefingResult,
@@ -25,6 +28,12 @@ export const pricesApi = {
   archiveSummary: () => api.get<AuctionArchiveSummary>("/prices/archive-summary"),
   originMarketCycle: (days = 180, min_count = 3) =>
     api.get<OriginMarketCycle>("/prices/origin-market-cycle", { days, min_count }),
+  monthlySeasonalCycle: () =>
+    api.get<MonthlySeasonalCycle>("/prices/monthly-seasonal-cycle"),
+  dailyPriceHistory: (start: string, end: string, min_count = 1) =>
+    api.get<DailyPriceHistory>("/prices/daily-price-history", { start, end, min_count }),
+  dailyGradeHistory: (start: string, end: string) =>
+    api.get<DailyGradeHistory>("/prices/daily-grade-history", { start, end }),
   harvestStrategy: (horizon_days = 14, grade = "중") =>
     api.get<HarvestStrategy>("/prices/harvest-strategy", { horizon_days, grade }),
   historyLong: (live = false) =>

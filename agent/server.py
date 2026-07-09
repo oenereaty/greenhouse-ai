@@ -38,7 +38,7 @@ def get_growth_data(zone: str = "전체", days: int = 7) -> list:
     """구역별 생육 데이터 조회 (초장·엽수·착과수·화방수·줄기직경).
 
     Args:
-        zone: 구역 코드 (A/B/C/전체)
+        zone: 구역 코드 (A/B/C/D/전체)
         days: 최근 몇 일치 조회 (기본 7일)
     """
     return growth_query(zone=zone, days=days)
@@ -49,7 +49,7 @@ def get_growth_latest(zone: str = "전체") -> list:
     """구역별 최신 생육 데이터만 조회.
 
     Args:
-        zone: 구역 코드 (A/B/C/전체)
+        zone: 구역 코드 (A/B/C/D/전체)
     """
     return growth_latest(zone=zone)
 
@@ -168,7 +168,7 @@ def add_growth_record(
     """새 생육 측정값을 CSV에 기록.
 
     Args:
-        zone: 구역 코드 (A/B/C)
+        zone: 구역 코드 (A/B/C/D)
         crop_height_cm: 초장 (cm)
         leaf_count: 엽수
         fruit_count: 착과수

@@ -54,5 +54,12 @@ def health() -> dict:
 
 @router.get("/api/system/config")
 def config() -> dict:
-    """민감하지 않은 기능 플래그만 노출 — 프론트엔드가 키 없는 기능을 우아하게 숨기도록."""
-    return get_settings().capability_flags()
+    """민감하지 않은 기능 플래그 + 발표용 고정 "오늘" 노출.
+
+    "오늘" 날짜는 tools/demo_clock.py가 유일한 출처다 — 프론트가 new Date()로
+    따로 계산하면(예: 영농일지 캘린더의 "오늘" 표시) 센서·생육·기상은 5/18인데
+    캘린더만 실제 오늘(7월)을 가리키는 불일치가 생긴다(사용자 확인, 2026-07-10).
+    """
+    from tools.demo_clock import demo_now
+
+    return {**get_settings().capability_flags(), "today": demo_now().date().isoformat()}

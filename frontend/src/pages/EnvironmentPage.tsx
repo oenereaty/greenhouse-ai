@@ -42,23 +42,35 @@ function ChartCard({ title, children }: { title: string; children: ReactNode }) 
 // ── 기상(외기·예보) 헬퍼 — 기상 탭에서 흡수 ──────────────────────────────
 // 이슬점차(기온 - 이슬점, dew point depression)가 작을수록 상대습도가 100%에
 // 가까워 표면(피복재·잎)이 조금만 더 식어도 결로가 생긴다 — 기본 습도물리
-// 원리(특정 논문 인용 아님). 기온 자체가 "적정" 구간이어도 이슬점에 바짝
-// 붙어 있으면 결로 위험이 있어 별도로 표시해야 한다(기존엔 기온만 보고
-// "적정"이라 판정해 이 위험을 놓치고 있었음).
-function tempLabel(t: number, dewpoint: number | null = null): [string, string] {
-  const [baseLabel, baseColor] =
+// 원리(특정 논문 인용 아님). 기온 범위와 결로 위험은 서로 다른 축이라 한 줄에
+// "적정 · 결로 위험"처럼 붙이면 모순처럼 읽힌다(사용자 피드백) — 온도 범위 판정과
+// 이슬점 근접 여부(결로 위험)를 별도 줄로 분리해서 보여준다.
+function tempLabel(t: number): [string, string] {
+  return (
     t >= 35 ? ["고온 경보", "#e03131"] :
     t >= 30 ? ["고온 주의", "#f76707"] :
     t >= 20 ? ["적정", "#2f9e44"] :
     t >= 10 ? ["서늘", "#1971c2"] :
-    ["저온 경보", "#6741d9"];
+    ["저온 경보", "#6741d9"]
+  );
+}
 
-  if (dewpoint != null) {
-    const spread = t - dewpoint;
-    if (spread <= 2) return [`${baseLabel} · 결로 위험(이슬점차 ${spread.toFixed(1)}℃)`, "#e03131"];
-    if (spread <= 4) return [`${baseLabel} · 결로 주의(이슬점차 ${spread.toFixed(1)}℃)`, "#f76707"];
-  }
-  return [baseLabel, baseColor];
+function dewpointRisk(t: number, dewpoint: number | null): [string, string] | null {
+  if (dewpoint == null) return null;
+  const spread = t - dewpoint;
+  if (spread <= 2) return [`결로 위험 — 이슬점차 ${spread.toFixed(1)}℃ (이슬점 ${dewpoint}℃에 근접)`, "#e03131"];
+  if (spread <= 4) return [`결로 주의 — 이슬점차 ${spread.toFixed(1)}℃`, "#f76707"];
+  return null;
+}
+
+// tools/env_calc.py의 VPD 5단계 참고범위(02_vpd.md)와 동일한 경계값 — 백엔드와
+// 프론트가 서로 다른 판정을 보여주지 않도록 임계값을 맞춘다.
+function vpdLabel(vpd: number): [string, string] {
+  if (vpd < 0.2) return ["병해 위험 참고치", "#e03131"];
+  if (vpd < 0.3) return ["과습 참고치", "#f76707"];
+  if (vpd <= 1.5) return ["적정 참고범위", "#2f9e44"];
+  if (vpd <= 2.2) return ["건조장해 참고치", "#f76707"];
+  return ["생리장해 위험 참고치", "#e03131"];
 }
 
 // 온실이 남북 방향(용마루 남-북, 측창은 동·서쪽)으로 배치됐다는 가정 하의 판단.
@@ -319,12 +331,26 @@ export default function EnvironmentPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 18 }}>
             <AnalysisCard title="외기 상태 분석">
               {(() => {
-                const [label, color] = tempLabel(aw.temp, aw.dewpoint);
+                const [label, color] = tempLabel(aw.temp);
+                const dewRisk = dewpointRisk(aw.temp, aw.dewpoint);
                 return (
                   <>
                     <p style={{ marginBottom: 6, fontSize: 20 }}>
                       온도: <span style={{ color, fontWeight: 600 }}>{label}</span> ({aw.temp}℃) · 이슬점 {aw.dewpoint}℃ · 기압 {aw.pressure_hpa} hPa
                     </p>
+                    {dewRisk && (
+                      <p style={{ marginBottom: 6, fontSize: 20, color: dewRisk[1], fontWeight: 600 }}>
+                        ⚠ {dewRisk[0]}
+                      </p>
+                    )}
+                    {aw.vpd != null && (() => {
+                      const [vLabel, vColor] = vpdLabel(aw.vpd);
+                      return (
+                        <p style={{ marginBottom: 6, fontSize: 20 }}>
+                          VPD: <span style={{ color: vColor, fontWeight: 600 }}>{vLabel}</span> ({aw.vpd} kPa)
+                        </p>
+                      );
+                    })()}
                     <p style={{ marginBottom: 6, fontSize: 20 }}>바람: {windLabel(aw.wind_speed, aw.wind_dir_kor, aw.wind_dir_deg ?? null)}</p>
                     <p style={{ fontSize: 20 }}>강수: {aw.rainfall_60m > 0 ? `비 ${aw.rainfall_60m}mm/h — 천창 폐쇄 필수` : `강수 없음 (일강수 ${aw.rainfall_day}mm)`}</p>
                   </>
@@ -376,13 +402,10 @@ export default function EnvironmentPage() {
                 <Line yAxisId="rh" type="monotone" dataKey="rh" name="상대습도(%)" stroke="#1971c2" strokeWidth={2} dot={false} strokeDasharray="5 3" />
               </ComposedChart>
             </ResponsiveContainer>
-            <p style={{ fontSize: 20, color: "var(--color-text-muted)", marginTop: 8 }}>
-              빨강: 외부온도 · 파랑 점선: 상대습도 · 하늘색 막대: 강수확률. 광량은 아래 시간대별 아이콘으로 분리했습니다.
-            </p>
 
             <div style={{ marginTop: 16 }}>
               <h4 style={{ fontSize: 20.5, marginBottom: 10, color: "var(--color-text-muted)" }}>예보광량 타임라인</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(86px, 1fr))", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 8 }}>
                 {(forecastQ.data ?? []).slice(0, 24).map((f, i) => {
                   const light = lightIcon(f.light_estimate);
                   return (

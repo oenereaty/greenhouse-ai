@@ -59,12 +59,12 @@ def _run_chat_message(question: str) -> str:
     docs = search(col, question, n_results=4)
     rag_ctx = "\n\n".join(f"[{d['meta'].get('source_file')}]\n{d['text'][:400]}" for d in docs)
 
-    from datetime import date as _date
+    from tools.demo_clock import demo_now
 
     sd = fetch_sensors()
     outdoor = _current_outdoor()
     env_ctx = (
-        f"[오늘 날짜] {_date.today().isoformat()}\n"
+        f"[오늘 날짜] {demo_now().date().isoformat()}\n"
         f"[현재 센서값] 온도 {sd.get('temp')}℃ 습도 {sd.get('rh')}% "
         f"CO2 {sd.get('co2')}ppm 일사 {sd.get('solar')}W/m²"
     )

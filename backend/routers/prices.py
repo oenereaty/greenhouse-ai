@@ -90,6 +90,48 @@ def get_origin_market_cycle(days: int = 180, min_count: int = 3) -> dict:
     return origin_market_cycle(days=days, min_count=min_count)
 
 
+@router.get("/monthly-seasonal-cycle")
+def get_monthly_seasonal_cycle() -> dict:
+    """전주·대전오정·대전노은 실거래 아카이브 기준 월별 계절 사이클(4kg 환산).
+
+    38만여 건 전체 스캔이라 무겁다 — 아카이브가 자주 바뀌지 않으므로 캐시.
+    """
+    from tools.auction_archive import monthly_seasonal_cycle
+
+    return cached("prices_monthly_seasonal_cycle", ttl_seconds=3600, fn=monthly_seasonal_cycle)
+
+
+@router.get("/daily-price-history")
+def get_daily_price_history(start: str, end: str, min_count: int = 1) -> dict:
+    """월별 계절 사이클 차트를 "확대"했을 때 보여줄 일자별 시장별 중앙값(4kg 환산)."""
+    from datetime import date as _date
+
+    from tools.auction_archive import daily_price_history
+
+    start_d = _date.fromisoformat(start)
+    end_d = _date.fromisoformat(end)
+    min_count = min(max(min_count, 1), 30)
+    return cached(
+        f"prices_daily_{start}_{end}_{min_count}", ttl_seconds=3600,
+        fn=lambda: daily_price_history(start_d, end_d, min_count=min_count),
+    )
+
+
+@router.get("/daily-grade-history")
+def get_daily_grade_history(start: str, end: str) -> dict:
+    """일자별 확대 차트의 등급별(상/중/하 tercile 추정) 보기."""
+    from datetime import date as _date
+
+    from tools.auction_archive import daily_grade_history
+
+    start_d = _date.fromisoformat(start)
+    end_d = _date.fromisoformat(end)
+    return cached(
+        f"prices_daily_grade_{start}_{end}", ttl_seconds=3600,
+        fn=lambda: daily_grade_history(start_d, end_d),
+    )
+
+
 @router.get("/harvest-strategy")
 def harvest_strategy(horizon_days: int = 14, grade: str = "중") -> dict:
     from tools.growth_data import assess_growth

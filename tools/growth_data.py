@@ -4,20 +4,30 @@ import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from tools.demo_clock import demo_now
+
 GROWTH_CSV = Path(__file__).parent.parent / "growth_data.csv"
 _SAMPLE_FLAG = Path(__file__).parent.parent / ".growth_data_is_sample"
+
+
+def _not_future(row_date: str) -> bool:
+    """발표용 고정 "오늘"(tools/demo_clock.py) 이후 날짜 행은 조회에서 숨긴다 —
+    생육데이터 05-25·06-01처럼 날짜를 추정해 넣은 이상치 주차가 "최신 현황"으로
+    잡히지 않게 한다(사용자 확인, 2026-07-10)."""
+    return row_date <= demo_now().date().isoformat()
 
 COLUMNS = [
     "date", "zone", "crop_height_cm", "leaf_count", "fruit_count",
     "truss_count", "stem_diameter_mm", "truss_height_cm", "notes",
 ]
 
-# 화방높이 판정을 문헌상 절대 밴드(예: 10~15cm)로 고정하지 않고, 같은 온실의
-# 최근 2~4주 평균·추세로 판정한다 — 절대 기준값은 문헌마다 편차가 크고(10~15cm vs
-# 10~20cm) 품종·계절·재배전략에 따라 달라져 단일 절대값 비교가 오히려 오판을
-# 유발한다는 현장 피드백 반영.
-TRUSS_TREND_WINDOW_DAYS = 21  # 최근 3주(2~4주 범위) 평균/추세 판정 창
-TRUSS_TREND_TOLERANCE_CM = 1.5  # 창 시작~끝 값 차이가 이 안이면 "보합(균형)"으로 판정
+# 화방높이 판정을 문헌상 절대 밴드(예: 10~15cm)로 고정하지 않고, 초장·줄기두께와
+# 같은 방식으로 전 주(trend_days) 대비 변화로 판정한다 — 절대 기준값은 문헌마다
+# 편차가 크고(10~15cm vs 10~20cm) 품종·계절·재배전략에 따라 달라져 단일 절대값
+# 비교가 오히려 오판을 유발한다는 현장 피드백 반영. (2026-07-10: 기존엔 21일
+# 평균·추세 창으로 판정했는데, 다른 지표와 기준이 달라 헷갈린다는 피드백으로
+# 전 주 대비 비교로 통일.)
+TRUSS_TREND_TOLERANCE_CM = 1.5  # 전 주 대비 변화가 이 안이면 "보합(균형)"으로 판정
 
 _migrated = False
 
@@ -97,6 +107,8 @@ def query(zone: str = "전체", days: int = 7) -> list[dict]:
         for row in csv.DictReader(f):
             if zone != "전체" and row["zone"] != zone:
                 continue
+            if not _not_future(row["date"]):
+                continue
             all_rows.append(row)
     if not all_rows:
         return []
@@ -112,6 +124,8 @@ def latest(zone: str = "전체") -> list[dict]:
     with GROWTH_CSV.open(encoding="utf-8") as f:
         for row in csv.DictReader(f):
             if zone != "전체" and row["zone"] != zone:
+                continue
+            if not _not_future(row["date"]):
                 continue
             z = row["zone"]
             if z not in latest_by_zone or row["date"] > latest_by_zone[z]["date"]:
@@ -152,14 +166,18 @@ def add_record(
 TRUSS_HEIGHT_SANITY_MIN = 3.0
 
 
-def _truss_trend_status(window_rows: list[dict], truss_height_cm: float) -> tuple[str, str]:
-    """최근 2~4주(기본 3주) 화방높이 평균·추세 → (상태, 설명).
+def _truss_trend_status(
+    truss_height_cm: float,
+    baseline: float | None,
+    baseline_label: str,
+    baseline_date: str | None,
+) -> tuple[str, str]:
+    """전 주(baseline_label) 대비 화방높이 변화 → (상태, 설명).
 
     지표는 '생장점(정단)과 첫 개화화방 사이 거리'로, high-wire 토마토에서 생식/영양생장
     균형 진단에 쓰는 측정치다. 절대 밴드(예: 10~15cm)는 문헌·품종·계절에 따라 편차가 커서
-    이 온실 자체의 최근 평균 대비 최근 추세(상승=영양생장 쪽, 하락=생식생장 쪽)로 판정한다.
-    window_rows: 최근 TRUSS_TREND_WINDOW_DAYS일 이내 기록(날짜순 정렬), truss_height_cm 값을
-    가진 행만 포함.
+    이 온실 자체의 전 주 대비 변화(상승=영양생장 쪽, 하락=생식생장 쪽)로 판정한다 — 초장·
+    줄기두께와 같은 비교 기준으로 통일(2026-07-10).
     """
     if truss_height_cm < TRUSS_HEIGHT_SANITY_MIN:
         return "측정 재확인 필요", (
@@ -167,37 +185,29 @@ def _truss_trend_status(window_rows: list[dict], truss_height_cm: float) -> tupl
             "생장점·개화화방 인식 오류나 입력 오류일 가능성이 있어 재측정을 권합니다."
         )
 
-    vals = []
-    for r in window_rows:
-        v = r.get("truss_height_cm", "")
-        if v not in ("", None):
-            vals.append(float(v))
-
-    if len(vals) < 2:
+    if baseline is None:
         return "균형 추정", (
-            f"화방높이 {truss_height_cm}cm — 최근 {TRUSS_TREND_WINDOW_DAYS}일 내 비교할 이전 기록이 "
-            "부족해 추세 판정이 어렵습니다. 최신값만 참고하시고, 2~4주 후 다시 확인하면 추세를 "
-            "판단할 수 있습니다."
+            f"화방높이 {truss_height_cm}cm — 비교할 이전 기록이 없어 추세 판정이 어렵습니다. "
+            "최신값만 참고하시고, 다음 주에 다시 확인하면 추세를 판단할 수 있습니다."
         )
 
-    recent_avg = round(sum(vals) / len(vals), 1)
-    delta = round(vals[-1] - vals[0], 1)
-    window_desc = f"최근 {TRUSS_TREND_WINDOW_DAYS}일(약 {TRUSS_TREND_WINDOW_DAYS // 7}주) 평균 {recent_avg}cm"
+    delta = round(truss_height_cm - baseline, 1)
+    baseline_desc = f"{baseline_label}({baseline_date}) 대비"
 
     if delta > TRUSS_TREND_TOLERANCE_CM:
         return "영양생장 쪽으로 추정", (
-            f"화방높이 {truss_height_cm}cm — {window_desc}, 같은 기간 {delta:+.1f}cm 상승 추세입니다. "
+            f"화방높이 {truss_height_cm}cm — {baseline_desc} {delta:+.1f}cm 상승했습니다. "
             "생장점이 화방보다 빠르게 자라는 방향이라 영양생장이 우세해지는 것으로 추정됩니다. "
             "줄기두께·착과 추세와 함께 판단해 주세요."
         )
     if delta < -TRUSS_TREND_TOLERANCE_CM:
         return "생식생장 쪽으로 추정", (
-            f"화방높이 {truss_height_cm}cm — {window_desc}, 같은 기간 {delta:+.1f}cm 하락 추세입니다. "
+            f"화방높이 {truss_height_cm}cm — {baseline_desc} {delta:+.1f}cm 하락했습니다. "
             "화방이 생장점을 따라잡는 방향이라 생식생장이 우세해지는 것으로 추정됩니다. "
             "줄기두께·착과 추세와 함께 판단해 주세요."
         )
     return "균형 추정", (
-        f"화방높이 {truss_height_cm}cm — {window_desc}, 같은 기간 변화 {delta:+.1f}cm로 "
+        f"화방높이 {truss_height_cm}cm — {baseline_desc} 변화 {delta:+.1f}cm로 "
         "뚜렷한 추세 없이 보합 상태입니다."
     )
 
@@ -216,6 +226,8 @@ def assess_growth(zone: str = "전체", trend_days: int = 7, trend_tolerance: in
     with GROWTH_CSV.open(encoding="utf-8") as f:
         for row in csv.DictReader(f):
             if zone != "전체" and row["zone"] != zone:
+                continue
+            if not _not_future(row["date"]):
                 continue
             all_rows.append(row)
 
@@ -241,12 +253,10 @@ def assess_growth(zone: str = "전체", trend_days: int = 7, trend_tolerance: in
 
         _th = latest_row.get("truss_height_cm", "")
         if _th not in ("", None):
-            window_start = latest_date - timedelta(days=TRUSS_TREND_WINDOW_DAYS)
-            window_rows = [
-                r for r in rows
-                if window_start <= datetime.strptime(r["date"], "%Y-%m-%d").date() <= latest_date
-            ]
-            status, desc = _truss_trend_status(window_rows, float(_th))
+            baseline_th_raw = baseline.get("truss_height_cm") if baseline else None
+            baseline_th = float(baseline_th_raw) if baseline_th_raw not in (None, "") else None
+            baseline_date = baseline["date"] if baseline and baseline_th is not None else None
+            status, desc = _truss_trend_status(float(_th), baseline_th, baseline_label, baseline_date)
             entry["truss_height_cm"] = float(_th)
             entry["truss_status"] = status
             entry["truss_desc"] = desc

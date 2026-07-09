@@ -2,11 +2,16 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 import { growthApi, type GrowthRecordIn } from "../api/growth";
-import { pricesApi } from "../api/prices";
 import { ErrorState, LoadingState } from "../components/common";
 import { MetricCard, MetricGrid } from "../components/MetricCard";
 
-const ZONE_COLORS: Record<string, string> = { A: "#3D7CF4", B: "#2f9e44", C: "#e67700", "전체": "#495057" };
+const ZONE_COLORS: Record<string, string> = {
+  A: "#3D7CF4", B: "#2f9e44", C: "#e67700", D: "#862e9c", "전체": "#495057",
+};
+
+// 같은 온실 구역이라 값이 서로 비슷해 색만으로 구분이 어려울 때가 있어(사용자
+// 피드백), 선 모양도 구역별로 다르게 줘서 겹쳐도 구분되게 한다.
+const ZONE_DASH: Record<string, string> = { A: "0", B: "6 3", C: "2 3", D: "8 3 2 3" };
 
 function pivotByZoneDate(records: { date: string; zone: string; [k: string]: unknown }[], field: string) {
   const byDate = new Map<string, Record<string, number | string>>();
@@ -69,7 +74,6 @@ export default function GrowthPage() {
   const recordsQ = useQuery({ queryKey: ["growth", zone, days], queryFn: () => growthApi.list(zone, days) });
   const latestQ = useQuery({ queryKey: ["growth-latest", zone], queryFn: () => growthApi.latest(zone) });
   const assessQ = useQuery({ queryKey: ["growth-assessment", zone], queryFn: () => growthApi.assessment(zone) });
-  const strategyQ = useQuery({ queryKey: ["harvest-strategy", 14], queryFn: () => pricesApi.harvestStrategy(14, "중") });
 
   const addMutation = useMutation({
     mutationFn: (r: GrowthRecordIn) => growthApi.add(r),
@@ -102,7 +106,7 @@ export default function GrowthPage() {
         <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 19.5 }}>
           구역
           <select value={zone} onChange={(e) => setZone(e.target.value)} style={{ padding: 6, borderRadius: 6, border: "1px solid var(--color-border)" }}>
-            {["전체", "A", "B", "C"].map((z) => (
+            {["전체", "A", "B", "C", "D"].map((z) => (
               <option key={z} value={z}>
                 {z}
               </option>
@@ -132,89 +136,48 @@ export default function GrowthPage() {
         </div>
       )}
 
-      <div className="card" style={{ border: "1.5px solid rgba(47, 158, 68, 0.35)" }}>
-        <h3 style={{ fontSize: 24, marginBottom: 6 }}>시장 연계 출하·온도 전략</h3>
-        <p style={{ fontSize: 20.5, color: "var(--color-text-muted)", marginBottom: 14 }}>
-          착과 상태와 최근 경락가 흐름을 묶어 2주 뒤 출하 타이밍에 맞춘 온도 관리 방향을 제안합니다.
-        </p>
-        {strategyQ.isLoading ? (
-          <LoadingState />
-        ) : strategyQ.isError ? (
-          <ErrorState message={(strategyQ.error as Error).message} />
-        ) : strategyQ.data ? (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 0.9fr) minmax(280px, 1.1fr)", gap: 18 }}>
-            <div
-              style={{
-                padding: 18,
-                borderRadius: 18,
-                background: "linear-gradient(135deg, rgba(231, 245, 255, 0.95), rgba(235, 251, 238, 0.95))",
-                border: "1px solid var(--color-border)",
-              }}
-            >
-              <div style={{ fontSize: 19.5, color: "var(--color-text-muted)", fontWeight: 800, marginBottom: 8 }}>
-                {strategyQ.data.target_date} 기준
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--color-primary-strong)", marginBottom: 10 }}>
-                {strategyQ.data.action}
-              </div>
-              <p style={{ fontSize: 22, lineHeight: 1.75, margin: 0 }}>{strategyQ.data.temperature_strategy}</p>
-            </div>
-            <div style={{ display: "grid", gap: 10, fontSize: 22, lineHeight: 1.7 }}>
-              <div>
-                <strong>판단 근거</strong>
-                <div>{strategyQ.data.rationale}</div>
-              </div>
-              <div>
-                <strong>가격 신호</strong>
-                <div>
-                  현재 {strategyQ.data.price.current_price?.toLocaleString() ?? "?"}원 → 2주 후 추정{" "}
-                  {strategyQ.data.price.projected_price?.toLocaleString() ?? "?"}원
-                  {strategyQ.data.price.change_pct !== null ? ` (${strategyQ.data.price.change_pct > 0 ? "+" : ""}${strategyQ.data.price.change_pct}%)` : ""}
-                </div>
-                <div style={{ color: "var(--color-text-muted)" }}>{strategyQ.data.price.reason}</div>
-              </div>
-              <div>
-                <strong>생육 신호</strong>
-                <div>
-                  초장 추세 {strategyQ.data.growth.avg_height_trend_cm != null ? `${strategyQ.data.growth.avg_height_trend_cm > 0 ? "+" : ""}${strategyQ.data.growth.avg_height_trend_cm}cm` : "—"}
-                  {" · "}줄기굵기 추세 {strategyQ.data.growth.avg_stem_trend_mm != null ? `${strategyQ.data.growth.avg_stem_trend_mm > 0 ? "+" : ""}${strategyQ.data.growth.avg_stem_trend_mm}mm` : "—"}
-                  {" · "}화방높이 균형 영양{strategyQ.data.growth.truss_balance?.["영양생장쪽"] ?? 0}/생식{strategyQ.data.growth.truss_balance?.["생식생장쪽"] ?? 0}/균형{strategyQ.data.growth.truss_balance?.["균형"] ?? 0}
-                </div>
-                <div style={{ color: "var(--color-text-muted)" }}>{strategyQ.data.growth.reason}</div>
-              </div>
-              <div>
-                <strong>환경 제약</strong>
-                <div>
-                  온도 {strategyQ.data.climate.temp}℃ · 습도 {strategyQ.data.climate.rh}% — {strategyQ.data.climate.reason}
-                </div>
-              </div>
-              <div style={{ fontSize: 20, color: "var(--color-text-muted)" }}>
-                {strategyQ.data.caveats.join(" ")}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
       {assessQ.data && assessQ.data.length > 0 && (
         <div className="card">
           <p style={{ fontSize: 19.5, color: "var(--color-text-muted)", marginBottom: 10 }}>
             핵심 생육 지표 — 초장·줄기두께는 전 주 대비 추세, 화방높이는 균형 추정(아래 상세 설명 참고)
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
             {assessQ.data.map((a, i) => (
-              <div key={i} style={{ fontSize: 20, lineHeight: 1.7 }}>
-                <strong>구역 {String(a.zone)}</strong> ({String(a.date)})
-                {a.truss_status ? (
-                  <div>
-                    화방높이: <strong>{String(a.truss_status)}</strong>
-                    <div style={{ color: "var(--color-text-muted)" }}>{String(a.truss_desc)}</div>
+              <div
+                key={i}
+                style={{
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 10,
+                  padding: "12px 14px",
+                  background: "var(--color-bg-soft)",
+                }}
+              >
+                <div style={{ fontSize: 21, fontWeight: 700, marginBottom: 8 }}>
+                  구역 {String(a.zone)} <span style={{ fontWeight: 400, color: "var(--color-text-muted)", fontSize: 18 }}>({String(a.date)})</span>
+                </div>
+
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 19, fontWeight: 600 }}>
+                    화방높이{a.truss_status ? <>: {String(a.truss_status)}</> : null}
                   </div>
-                ) : (
-                  <div style={{ color: "var(--color-text-muted)" }}>{String(a.truss_desc)}</div>
-                )}
-                <div style={{ color: "var(--color-text-muted)" }}>{String(a.crop_height_cm_trend_desc)}</div>
-                <div style={{ color: "var(--color-text-muted)" }}>{String(a.stem_diameter_mm_trend_desc)}</div>
+                  <div style={{ fontSize: 18, color: "var(--color-text-muted)", lineHeight: 1.55, marginTop: 2 }}>
+                    {String(a.truss_desc)}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 19, fontWeight: 600 }}>초장 추세</div>
+                  <div style={{ fontSize: 18, color: "var(--color-text-muted)", lineHeight: 1.55, marginTop: 2 }}>
+                    {String(a.crop_height_cm_trend_desc)}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 19, fontWeight: 600 }}>줄기두께 추세</div>
+                  <div style={{ fontSize: 18, color: "var(--color-text-muted)", lineHeight: 1.55, marginTop: 2 }}>
+                    {String(a.stem_diameter_mm_trend_desc)}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -238,15 +201,22 @@ export default function GrowthPage() {
         <>
           <div className="card">
             <h3 style={{ fontSize: 24, marginBottom: 12 }}>초장 추이</h3>
+            <p style={{ fontSize: 18, color: "var(--color-text-muted)", marginBottom: 8 }}>
+              Y축은 0이 아니라 구역별 실제 값 범위에 맞춰 확대했습니다 — 구역 간 초장 차이는 몇 cm 수준으로 작아 0부터 그리면 거의 겹쳐 보입니다.
+            </p>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={heightSeries}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis dataKey="date" tick={{ fontSize: 17 }} />
-                <YAxis tick={{ fontSize: 17 }} domain={[0, "auto"]} />
+                <YAxis tick={{ fontSize: 17 }} domain={["auto", "auto"]} />
                 <Tooltip />
                 <Legend />
                 {zones.map((z) => (
-                  <Line key={z} type="monotone" dataKey={z} name={`구역 ${z}`} stroke={ZONE_COLORS[z] ?? "#333"} dot />
+                  <Line
+                    key={z} type="monotone" dataKey={z} name={`구역 ${z}`}
+                    stroke={ZONE_COLORS[z] ?? "#333"} strokeWidth={2.5}
+                    strokeDasharray={ZONE_DASH[z]} dot={{ r: 3 }}
+                  />
                 ))}
               </LineChart>
             </ResponsiveContainer>
@@ -263,7 +233,11 @@ export default function GrowthPage() {
                   <Tooltip />
                   <Legend />
                   {zones.map((z) => (
-                    <Line key={z} type="monotone" dataKey={z} name={`구역 ${z}`} stroke={ZONE_COLORS[z] ?? "#333"} dot />
+                    <Line
+                      key={z} type="monotone" dataKey={z} name={`구역 ${z}`}
+                      stroke={ZONE_COLORS[z] ?? "#333"} strokeWidth={2.5}
+                      strokeDasharray={ZONE_DASH[z]} dot={{ r: 3 }}
+                    />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
@@ -278,7 +252,11 @@ export default function GrowthPage() {
                   <Tooltip />
                   <Legend />
                   {zones.map((z) => (
-                    <Line key={z} type="monotone" dataKey={z} name={`구역 ${z}`} stroke={ZONE_COLORS[z] ?? "#333"} dot={false} />
+                    <Line
+                      key={z} type="monotone" dataKey={z} name={`구역 ${z}`}
+                      stroke={ZONE_COLORS[z] ?? "#333"} strokeWidth={2.5}
+                      strokeDasharray={ZONE_DASH[z]} dot={false}
+                    />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
@@ -356,7 +334,7 @@ export default function GrowthPage() {
           <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 19.5 }}>
             구역
             <select value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })} style={{ padding: 6, borderRadius: 6, border: "1px solid var(--color-border)" }}>
-              {["A", "B", "C"].map((z) => (
+              {["A", "B", "C", "D"].map((z) => (
                 <option key={z} value={z}>
                   {z}
                 </option>

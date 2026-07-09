@@ -81,11 +81,14 @@ const GhostTextEditor = forwardRef<GhostTextEditorHandle, GhostTextEditorProps>(
       return hit ? hit.slice(prefix.length) : "";
     };
 
+    // 이전엔 스페이스 두 번을 눌러야만 직전 단어에 대한 고스트가 (다시) 떴는데,
+    // 그 경로로 뜬 고스트를 Tab으로 확정하면 "흰가루  병"처럼 단어 사이에 공백이
+    // 두 개 낀 채로 붙어버렸다(사용자 확인, 2026-07-10). 지금 입력 중인 마지막
+    // 단어만 보고 바로 제안하도록 단순화 — 공백 뒤에는 아직 완성된 다음 단어가
+    // 없으므로 자연스럽게 고스트가 사라진다.
     const updateGhost = () => {
       const text = getPlainText();
-      const dblSpace = text.length >= 2 && text.slice(-1) === " " && text.slice(-2, -1) === " ";
-      const search = dblSpace ? text.trimEnd() : text;
-      const lastWord = search.match(/(\S+)$/)?.[1] ?? "";
+      const lastWord = text.match(/(\S+)$/)?.[1] ?? "";
       showGhost(findSuffix(lastWord));
     };
 

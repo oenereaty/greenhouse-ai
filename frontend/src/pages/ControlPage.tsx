@@ -42,7 +42,9 @@ function computeTempAnalysis(records: DiagnosisRecord[]) {
       dayMax: Math.round(Math.max(...dayT) * 10) / 10,
       dayMin: Math.round(Math.min(...dayT) * 10) / 10,
       nightAvg,
-      recNight: Math.round(Math.max(16, Math.min(22, dayAvg - 5)) * 10) / 10,
+      // DIF(주야간 온도차) 5~7℃는 knowledge_base/01_temperature.md 근거값 — 중간값 6℃로 계산
+      // (tools/goal_manager.py의 GOAL_HINTS·_STAGE_TABLE과 같은 수치로 통일, 2026-07-10).
+      recNight: Math.round(Math.max(16, Math.min(22, dayAvg - 6)) * 10) / 10,
     };
   }
   return { hasDayData: false, dayAvg: 0, dayMax: 0, dayMin: 0, nightAvg: null, recNight: 19 };
@@ -161,7 +163,7 @@ export default function ControlPage() {
               <div className="card" style={{ padding: "10px 14px" }}>
                 <div style={{ fontSize: 19, color: "var(--color-text-muted)" }}>권장 야간 온도</div>
                 <div style={{ fontSize: 22, fontWeight: 600 }}>{tempAnalysis.recNight}℃</div>
-                <div style={{ fontSize: 19, color: "var(--color-text-muted)" }}>주야간 5℃ 차 기준</div>
+                <div style={{ fontSize: 19, color: "var(--color-text-muted)" }}>주야간 5~7℃ 차 기준</div>
               </div>
               <div className="card" style={{ padding: "10px 14px" }}>
                 <div style={{ fontSize: 19, color: "var(--color-text-muted)" }}>현재 야간 평균</div>
@@ -173,7 +175,7 @@ export default function ControlPage() {
               {tempAnalysis.dayAvg > 30
                 ? `주간 고온(${tempAnalysis.dayAvg}℃) 감지. 야간 ${tempAnalysis.recNight}℃ 이하 목표. 관수·환기 우선 점검.`
                 : tempAnalysis.dayAvg >= 22
-                  ? `주간 온도 적정(${tempAnalysis.dayAvg}℃). 야간 ${tempAnalysis.recNight}℃ 목표 — 주야간 5℃ 차 유지 시 착과율 향상.`
+                  ? `주간 온도 적정(${tempAnalysis.dayAvg}℃). 야간 ${tempAnalysis.recNight}℃ 목표 — 주야간 5~7℃ 차 유지 시 착과율 향상.`
                   : `주간 저온(${tempAnalysis.dayAvg}℃). 야간 최소 16℃ 이상 유지 필요.`}
             </p>
           </>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { diaryApi, type DiaryEntryIn } from "../api/diary";
+import { systemApi } from "../api/system";
 import { AiText, ErrorState, JobButton, LoadingState, cleanAiText } from "../components/common";
 import GhostTextEditor, { type GhostTextEditorHandle } from "../components/diary/GhostTextEditor";
 import { useJobPoll } from "../hooks/useJobPoll";
@@ -45,6 +46,7 @@ function MonthCalendar({
   entries,
   harvestDate,
   selected,
+  today,
   onSelect,
   onPrev,
   onNext,
@@ -54,12 +56,12 @@ function MonthCalendar({
   entries: Record<string, DiaryEntry[]>;
   harvestDate: string | null;
   selected: string;
+  today: string;
   onSelect: (d: string) => void;
   onPrev: () => void;
   onNext: () => void;
 }) {
   const weeks = useMemo(() => buildWeeks(year, month), [year, month]);
-  const today = todayStr();
 
   return (
     <div className="card">
@@ -94,6 +96,9 @@ function MonthCalendar({
                 const isToday = ds === today;
                 const isSelected = ds === selected;
                 const isHarvest = ds === harvestDate;
+                const dayTags = Array.from(new Set((entries[ds] ?? []).flatMap((e) => e.tags ?? [])));
+                const shownTags = dayTags.slice(0, 2);
+                const extraCount = dayTags.length - shownTags.length;
                 return (
                   <td key={di} style={{ textAlign: "center", padding: 2 }}>
                     <button
@@ -114,10 +119,17 @@ function MonthCalendar({
                     >
                       <span style={{ fontSize: 19.5, fontWeight: isToday ? 700 : 400 }}>{d}</span>
                       {isHarvest && <span style={{ fontSize: 16, color: "var(--color-bad)", fontWeight: 700 }}>수확목표</span>}
-                      {count > 0 && (
-                        <span style={{ fontSize: 16, color: "var(--color-primary)" }}>
-                          {count}건
+                      {shownTags.length > 0 ? (
+                        <span style={{ fontSize: 14, color: "var(--color-primary)", lineHeight: 1.25 }}>
+                          {shownTags.join(", ")}
+                          {extraCount > 0 ? ` +${extraCount}` : ""}
                         </span>
+                      ) : (
+                        count > 0 && (
+                          <span style={{ fontSize: 16, color: "var(--color-primary)" }}>
+                            {count}건
+                          </span>
+                        )
                       )}
                     </button>
                   </td>
@@ -179,9 +191,6 @@ function HarvestSection() {
           <p style={{ fontWeight: 700, color: "var(--color-good)", marginBottom: 6 }}>현재 단계 · {statusQ.data.stage.stage}</p>
           <p style={{ fontSize: 20, marginBottom: 3 }}>
             <strong>이 시기 관리</strong> — {statusQ.data.stage.manage}
-          </p>
-          <p style={{ fontSize: 20 }}>
-            <strong>수확 타이밍</strong> — {statusQ.data.stage.timing}
           </p>
           {statusQ.data.stage.consistency_note && (
             <p style={{ fontSize: 19.5, marginTop: 8, color: "var(--color-warn)" }}>
@@ -422,7 +431,7 @@ function NewEntrySection({ date }: { date: string }) {
         placeholder="오늘 작업, 관찰사항, 방제 내용 등을 자유롭게 기록하세요."
       />
       <p style={{ fontSize: 17, color: "var(--color-text-muted)", textAlign: "right", marginTop: 4 }}>
-        Tab 자동완성 수락 · 스페이스 두 번 → 트리거
+        입력하면 자동완성 제안 · Tab으로 수락
       </p>
 
       {detected.diseases.length > 0 && (
@@ -502,9 +511,15 @@ const emptyRecipe: NutrientRecipe = { n: 0, p: 0, k: 0, ca: 0, mg: 0, ec: 0, ph:
 
 function NutrientSection() {
   const qc = useQueryClient();
+  const configQ = useQuery({ queryKey: ["system-config"], queryFn: systemApi.config, staleTime: Infinity });
   const [date, setDate] = useState(todayStr());
   const [recipe, setRecipe] = useState<NutrientRecipe>(emptyRecipe);
   const [symptom, setSymptom] = useState("");
+
+  useEffect(() => {
+    if (configQ.data?.today) setDate(configQ.data.today);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configQ.data?.today]);
 
   const listQ = useQuery({ queryKey: ["nutrient-recent"], queryFn: () => diaryApi.nutrientList(20) });
 
@@ -543,11 +558,11 @@ function NutrientSection() {
       </label>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12 }}>
-        {field("n", "N (ppm)")}
-        {field("p", "P (ppm)")}
-        {field("k", "K (ppm)")}
-        {field("ca", "Ca (ppm)")}
-        {field("mg", "Mg (ppm)", 5)}
+        {field("n", "N (g)")}
+        {field("p", "P (g)")}
+        {field("k", "K (g)")}
+        {field("ca", "Ca (g)")}
+        {field("mg", "Mg (g)", 5)}
         {field("ec", "EC (mS/cm)", 0.1)}
         {field("ph", "pH", 0.1)}
       </div>
@@ -612,46 +627,67 @@ function NutrientSection() {
 }
 
 export default function DiaryPage() {
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth() + 1);
-  const [selected, setSelected] = useState(todayStr());
+  // 캘린더의 "오늘"은 발표용 고정 날짜(tools/demo_clock, /api/system/config의
+  // today)를 따른다 — 브라우저의 실제 new Date()를 쓰면 센서·생육·기상은
+  // 2026-05-18인데 캘린더만 실제 오늘(7월)을 가리키는 불일치가 생긴다
+  // (사용자 확인, 2026-07-10).
+  const configQ = useQuery({ queryKey: ["system-config"], queryFn: systemApi.config, staleTime: Infinity });
+  const [year, setYear] = useState<number | null>(null);
+  const [month, setMonth] = useState<number | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (configQ.data?.today && year === null) {
+      const [y, m] = configQ.data.today.split("-").map(Number);
+      setYear(y);
+      setMonth(m);
+      setSelected(configQ.data.today);
+    }
+  }, [configQ.data, year]);
 
   const entriesQ = useQuery({ queryKey: ["diary-all"], queryFn: diaryApi.all });
 
   const prevMonth = () => {
+    if (month === null || year === null) return;
     if (month === 1) {
-      setYear((y) => y - 1);
+      setYear(year - 1);
       setMonth(12);
-    } else setMonth((m) => m - 1);
+    } else setMonth(month - 1);
   };
   const nextMonth = () => {
+    if (month === null || year === null) return;
     if (month === 12) {
-      setYear((y) => y + 1);
+      setYear(year + 1);
       setMonth(1);
-    } else setMonth((m) => m + 1);
+    } else setMonth(month + 1);
   };
 
   const harvestStatusQ = useQuery({ queryKey: ["harvest-status"], queryFn: diaryApi.harvestStatus });
+
+  if (entriesQ.isLoading || year === null || month === null || selected === null) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <HarvestSection />
+        <LoadingState />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <HarvestSection />
 
-      {entriesQ.isLoading ? (
-        <LoadingState />
-      ) : (
-        <MonthCalendar
-          year={year}
-          month={month}
-          entries={entriesQ.data ?? {}}
-          harvestDate={harvestStatusQ.data?.harvest_date ?? null}
-          selected={selected}
-          onSelect={setSelected}
-          onPrev={prevMonth}
-          onNext={nextMonth}
-        />
-      )}
+      <MonthCalendar
+        year={year}
+        month={month}
+        entries={entriesQ.data ?? {}}
+        harvestDate={harvestStatusQ.data?.harvest_date ?? null}
+        selected={selected}
+        today={configQ.data!.today}
+        onSelect={setSelected}
+        onPrev={prevMonth}
+        onNext={nextMonth}
+      />
 
       <UpcomingPlanSection />
 

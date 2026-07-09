@@ -1,7 +1,11 @@
 """xlsx + CSV 실측 생육 데이터를 growth_data.csv로 임포트.
 
-Zone A: 생육정보 토마토.xlsx        (사용자 농장 실측 — 2025-09-26 정식 주기, 이전 주기 대체)
-Zone B: 전라북도_농가데이터셋_토마토.csv  (전북 임실군 참조 농가)
+Zone A/B/C/D: 생육정보 토마토.xlsx  (사용자 농장 실측 — 표본1~4가 각각 온실 구역
+              A~D를 뜻함, 2025-09-26 정식 주기. 이전엔 4개 표본을 평균해 "Zone A"
+              하나로 뭉뚱그렸었는데, 실제로는 구역별 독립 계통이라 각자 따로 누적해야
+              한다 — 2026-07-09 사용자 확인.)
+Zone 참조: 전라북도_농가데이터셋_토마토.csv  (전북 임실군 참조 농가 — 위 A~D와 겹치지
+              않게 zone 라벨을 "참조"로 구분)
 
 실행:
     python scripts/import_growth_data.py
@@ -25,9 +29,12 @@ COLUMNS = [
 XLSX_PATH = BASE_DIR / "file" / "생육정보 토마토.xlsx"
 CSV_PATH  = BASE_DIR / "file" / "전라북도_농가데이터셋_토마토.csv"
 
-# Zone A 정식 초기 추정 기준 — 실측 초장(누적) 값이 없고 주간 생장길이만 있어
-# Zone B와 동일한 관례로 베이스라인에서부터 누적한다.
-ZONE_A_BASELINE_CM = 50.0
+# 정식 초기 추정 기준 — 실측 초장(누적) 값이 없고 주간 생장길이만 있어
+# 구역별로 이 베이스라인에서부터 각자 누적한다.
+ZONE_BASELINE_CM = 50.0
+
+# 표본 번호 → 온실 구역 코드
+SAMPLE_TO_ZONE = {1: "A", 2: "B", 3: "C", 4: "D"}
 
 # 원본 xlsx의 알려진 데이터 오류 보정값 (사용자 확인 완료, tomato-yield 2026-07-09).
 #  - 2026-04-24(29주차): 생장길이 4개 표본이 엑셀에 의해 날짜(1900-xx-xx)로 잘못
@@ -55,8 +62,8 @@ def _safe_float(val, default: float = 0.0) -> float:
         return default
 
 
-def load_zone_a() -> list[dict]:
-    """생육정보 토마토.xlsx → Zone A 행 목록.
+def load_own_farm_zones() -> list[dict]:
+    """생육정보 토마토.xlsx → 구역 A~D 행 목록 (표본1~4 = 구역 A~D, 각자 독립 누적).
 
     표(header)는 4번째 줄(0-index 2)에 있고, 주차마다 표본 1~4가 4행씩 이어진다.
     측정일자/주차는 각 주차 블록의 첫 행에만 적혀 있어 forward-fill이 필요하다.
@@ -88,41 +95,37 @@ def load_zone_a() -> list[dict]:
         last_date = d
 
     raw["date"] = raw["week"].map(week_dates)
+    raw["zone"] = raw["sample"].map(SAMPLE_TO_ZONE)
 
     for (d, sample), mm in _GROWTH_MM_FIX.items():
         raw.loc[(raw["date"] == d) & (raw["sample"] == sample), "growth_mm"] = mm
     for (d, sample), mm in _STEM_MM_FIX.items():
         raw.loc[(raw["date"] == d) & (raw["sample"] == sample), "stem_mm"] = mm
 
-    grouped = raw.groupby("date", sort=True).agg(
-        growth_mm=("growth_mm", "mean"),
-        truss_h_mm=("truss_h_mm", "mean"),
-        stem_mm=("stem_mm", "mean"),
-        leaf_count=("leaf_count", "mean"),
-        fruit_count=("fruit_count", "mean"),
-        truss_no=("truss_no", "mean"),
-    ).reset_index().sort_values("date")
-
     rows = []
-    cum_h = ZONE_A_BASELINE_CM
-    for _, r in grouped.iterrows():
-        cum_h += (r["growth_mm"] or 0.0) / 10
-        rows.append({
-            "date":              r["date"],
-            "zone":              "A",
-            "crop_height_cm":    round(cum_h, 1),
-            "leaf_count":        _safe_int(r["leaf_count"]),
-            "fruit_count":       _safe_int(r["fruit_count"]),
-            "truss_count":       max(1, _safe_int(r["truss_no"])),
-            "stem_diameter_mm":  _safe_float(r["stem_mm"]),
-            "truss_height_cm":   round(r["truss_h_mm"] / 10, 1) if r["truss_h_mm"] == r["truss_h_mm"] else "",
-            "notes":             "",
-        })
+    for zone in ["A", "B", "C", "D"]:
+        zrows = raw[raw["zone"] == zone].sort_values("date")
+        cum_h = ZONE_BASELINE_CM
+        for _, r in zrows.iterrows():
+            growth_mm = r["growth_mm"]
+            cum_h += (growth_mm if growth_mm == growth_mm else 0.0) / 10  # NaN-safe (growth_mm != growth_mm iff NaN)
+            truss_h = r["truss_h_mm"]
+            rows.append({
+                "date":              r["date"],
+                "zone":              zone,
+                "crop_height_cm":    round(cum_h, 1),
+                "leaf_count":        _safe_int(r["leaf_count"]),
+                "fruit_count":       _safe_int(r["fruit_count"]),
+                "truss_count":       max(1, _safe_int(r["truss_no"])),
+                "stem_diameter_mm":  _safe_float(r["stem_mm"]),
+                "truss_height_cm":   round(truss_h / 10, 1) if truss_h == truss_h else "",
+                "notes":             "",
+            })
     return rows
 
 
-def load_zone_b() -> list[dict]:
-    """CSV → Zone B 행 목록 (전북 임실군 참조 농가).
+def load_reference_farm() -> list[dict]:
+    """CSV → 참조농가 행 목록 (전북 임실군, zone="참조" — 실농가 A~D와 구분).
 
     초장 정보가 없어 생장길이 누적으로 추정 (기준 50cm).
     """
@@ -135,14 +138,14 @@ def load_zone_b() -> list[dict]:
     )
 
     rows = []
-    cum_h = 50.0  # 정식 초기 추정 기준 (cm)
+    cum_h = ZONE_BASELINE_CM
     for _, r in weekly.iterrows():
         g_mm = _safe_float(r.get("생장길이"))
         cum_h += g_mm / 10  # mm → cm 누적
 
         rows.append({
             "date":            str(r["조사일"]).split()[0],
-            "zone":            "B",
+            "zone":            "참조",
             "crop_height_cm":  round(cum_h, 1),
             "leaf_count":      _safe_int(r.get("엽수")),
             "fruit_count":     _safe_int(r.get("열매수")),
@@ -155,9 +158,11 @@ def load_zone_b() -> list[dict]:
 
 
 def main():
-    rows_a = load_zone_a()
-    rows_b = load_zone_b()
-    all_rows = sorted(rows_a + rows_b, key=lambda r: r["date"])
+    """참조농가(전북 임실군) 데이터는 2026-07-11 발표에서 제외하기로 해 더 이상
+    growth_data.csv에 넣지 않는다 — 실농가 구역 A~D만 남긴다(사용자 확인).
+    load_reference_farm()은 나중에 다시 필요해질 경우를 위해 남겨둔다."""
+    rows_own = load_own_farm_zones()
+    all_rows = sorted(rows_own, key=lambda r: (r["date"], r["zone"]))
 
     with GROWTH_CSV.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
@@ -171,8 +176,9 @@ def main():
         return f"{rows[0]['date']} ~ {rows[-1]['date']}" if rows else "(데이터 없음)"
 
     print(f"완료: {len(all_rows)}행 저장 → {GROWTH_CSV}")
-    print(f"  Zone A (xlsx): {len(rows_a)}행  {_range(rows_a)}")
-    print(f"  Zone B (CSV) : {len(rows_b)}행  {_range(rows_b)}")
+    for zone in ["A", "B", "C", "D"]:
+        zrows = [r for r in rows_own if r["zone"] == zone]
+        print(f"  구역 {zone} (실농가): {len(zrows)}행  {_range(zrows)}")
 
 
 if __name__ == "__main__":

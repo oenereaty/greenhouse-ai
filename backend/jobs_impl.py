@@ -158,12 +158,12 @@ def _current_env_line() -> str:
 
 
 def run_plan_check(date_str: str, plan_summary: str, days_left: int) -> str:
-    from datetime import date
+    from tools.demo_clock import demo_now
     ref = _rag_context(plan_summary, n_results=3)
     env_line = _current_env_line()
     env_part = f"\n{env_line}" if env_line else ""
     user = (
-        f"오늘은 {date.today().isoformat()}이고, {date_str}({days_left}일 후)에 다음 계획이 "
+        f"오늘은 {demo_now().date().isoformat()}이고, {date_str}({days_left}일 후)에 다음 계획이 "
         f"영농일지에 기록되어 있습니다: \"{plan_summary}\"{env_part}\n\n참고자료:\n{ref}"
     )
     return ollama_chat(
@@ -180,10 +180,10 @@ def run_plan_check_feedback(
     date_str: str, plan_summary: str, days_left: int, prev_checklist: str, farmer_feedback: str,
 ) -> str:
     """농가가 이전 체크리스트에 남긴 의견을 반영해 다시 답변."""
-    from datetime import date
+    from tools.demo_clock import demo_now
     ref = _rag_context(plan_summary, n_results=3)
     user = (
-        f"오늘은 {date.today().isoformat()}이고, {date_str}({days_left}일 후)에 다음 계획이 "
+        f"오늘은 {demo_now().date().isoformat()}이고, {date_str}({days_left}일 후)에 다음 계획이 "
         f"영농일지에 기록되어 있습니다: \"{plan_summary}\"\n\n"
         f"[이전 체크리스트]\n{prev_checklist}\n\n"
         f"[농가 의견]\n{farmer_feedback}\n\n참고자료:\n{ref}"

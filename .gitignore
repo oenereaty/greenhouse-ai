@@ -29,8 +29,10 @@ auction_history.csv
 attachments/
 *.log
 auto_diagnosis_settings.json
+auto_report_settings.json
 control_log.json
 reports/snapshots/
 pest_log.json.migrated
 growth_data.csv.bak*
 growth_data.csv.before_*
+fertilizer_products.json

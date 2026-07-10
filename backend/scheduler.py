@@ -1,7 +1,7 @@
 """자동 진단 백그라운드 스케줄러 — APScheduler AsyncIOScheduler.
 
-Streamlit의 `st.fragment(run_every="5s")` 폴러를 대체한다. 브라우저 탭이 열려있지
-않아도 서버가 살아있는 한 계속 동작한다는 점이 기존 방식보다 개선된 부분이다.
+브라우저 탭이 열려있지 않아도 서버가 살아있는 한 계속 동작하는 백그라운드
+스케줄러다.
 
 설정({enabled, interval_minutes})은 다른 tools/*.json과 같은 관례로
 레포 루트의 auto_diagnosis_settings.json에 저장한다.

@@ -1,7 +1,6 @@
 """조치 제안 생성(LLM) + 농장주 응답 로깅.
 
-Streamlit UI에서 시작된 로직이지만 React/FastAPI 전환 후에도 백엔드가 공용으로
-사용해야 하므로 tools 계층에 둔다.
+FastAPI 백엔드와 MCP 에이전트가 공용으로 사용해야 하므로 tools 계층에 둔다.
 """
 import json
 import os

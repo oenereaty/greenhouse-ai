@@ -689,4 +689,4 @@ if __name__ == "__main__":
         print(f"   → [{r['meta']['source_file']}] {r['meta']['section']} (distance={r['distance']})")
         print(f"   → {r['text'][:100]}...")
 
-    print("\n완료. Streamlit 앱 실행: streamlit run ui/app.py")
+    print("\n완료.")

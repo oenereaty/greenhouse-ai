@@ -159,7 +159,7 @@ async def run_agent(
 
 
 # ---------------------------------------------------------------------------
-# Convenience wrapper for sync callers (e.g. Streamlit, reports/weekly_report.py)
+# Convenience wrapper for sync callers (e.g. reports/weekly_report.py)
 # ---------------------------------------------------------------------------
 
 def ask(

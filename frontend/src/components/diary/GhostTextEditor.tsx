@@ -13,11 +13,11 @@ interface GhostTextEditorProps {
 }
 
 /**
- * Ghost-text autocomplete editor, ported from ui/diary_editor/index.html.
+ * Ghost-text autocomplete editor.
  * Uncontrolled contentEditable (React never re-renders its DOM content) — the
  * ghost suggestion is a real `contenteditable="false"` span appended after the
- * caret, same technique the original Streamlit component used. Composition
- * events are guarded so Korean IME input never gets clobbered mid-keystroke.
+ * caret. Composition events are guarded so Korean IME input never gets
+ * clobbered mid-keystroke.
  */
 const GhostTextEditor = forwardRef<GhostTextEditorHandle, GhostTextEditorProps>(
   ({ autocompleteTerms, onChange, resetKey, placeholder }, ref) => {

@@ -22,9 +22,6 @@ uvicorn[standard]>=0.32
 pydantic-settings>=2.6
 python-multipart>=0.0.12
 
-# Web UI (legacy Streamlit — kept running in parallel during React migration)
-streamlit>=1.58
-
 # Utilities
 pyyaml>=6.0
 python-dotenv>=1.0.0

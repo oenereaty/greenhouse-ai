@@ -28,8 +28,6 @@ LLM (로컬 Ollama, gemma4:12b)
   │     └── KAMIS 도매가격 + 판매 방향 제안 (kamis_client.py, price_advisor.py)
   └── RAG (rag/pipeline.py, BGE-M3 임베딩 + ChromaDB)
         └── knowledge_base/ (작물생리학 md + 농진청 재배 매뉴얼 PDF)
-
-ui/app.py — 레거시 Streamlit 대시보드 (React 이전 완료 전까지 병행 유지)
 ```
 
 ## 설치
@@ -90,14 +88,6 @@ python -m agent.agent "오늘 온실 상태 점검해줘"
 python -m reports.weekly_report
 ```
 
-### 레거시 Streamlit 실행
-
-React 이전이 완료될 때까지 기존 Streamlit UI도 유지합니다.
-
-```bash
-streamlit run ui/app.py
-```
-
 ## 도구 개별 테스트
 
 ```bash
@@ -149,9 +139,6 @@ greenhouse-ai/
 │   ├── tomato_physiology.md
 │   ├── 01_temperature.md ~ 04_ventilation.md
 │   └── *.pdf                # 농진청 재배 매뉴얼 등 참고자료
-├── ui/
-│   ├── app.py               # 레거시 Streamlit 대시보드
-│   └── advisor.py           # tools.advisor 호환 wrapper
 ├── reports/
 │   └── weekly_report.py
 └── scripts/

@@ -5,7 +5,7 @@
 ■ 이 프로젝트는 무엇인가
 
 한국 온실 토마토 농가를 위한 AI 의사결정 지원 도구입니다.
-Streamlit 대시보드 위에서, 로컬에서 돌아가는 LLM(Ollama gemma4:12b)과
+React + FastAPI 위에서, 로컬에서 돌아가는 LLM(Ollama gemma4:12b)과
 RAG(BGE-M3 임베딩 + ChromaDB), 그리고 여러 공공데이터 API를 결합해
 "지금 온실 상태가 괜찮은지, 뭘 해야 하는지"를 실시간으로 알려줍니다.
 
@@ -79,7 +79,7 @@ RAG(BGE-M3 임베딩 + ChromaDB), 그리고 여러 공공데이터 API를 결합
 - 임베딩: BGE-M3 (로컬 CPU 실행)
 - 벡터 DB: ChromaDB (지식베이스 검색용)
 - 에이전트: FastMCP 서버 + Ollama 도구 호출(Function Calling)
-- 프레임워크: Streamlit
+- 프레임워크: React (Vite) + FastAPI
 - 외부 API: 기상청 API Hub / data.go.kr, aT(농넷) 경락가격,
   NCPMS 병해충 도감, 네이버 뉴스 검색 API
 
